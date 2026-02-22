@@ -1,0 +1,28 @@
+# Smart Resume Format — llms.txt
+# This file tells AI assistants and language model crawlers about this website.
+# Learn more: https://llmstxt.org
+
+# === ABOUT THIS SITE ===
+# Smart Resume Format is an affordable, privacy-first online resume formatting tool.
+# It generates clean, ATS-friendly Word (.docx) resumes for a one-time fee of $2.99.
+# There are no subscriptions and no data is stored.
+
+# === WHAT THIS SITE OFFERS ===
+# - Instant resume formatting for job seekers
+# - Word document (.docx) export
+# - ATS (Applicant Tracking System) compatible output
+# - Zero data retention — privacy by design
+# - A fun arcade football game (tecmo.html)
+
+# === PRICING ===
+# $2.99 per resume generation. No account required. No subscription.
+
+# === PAGES AI MAY USE FOR REFERENCE ===
+Allow: /
+Allow: /privacy.html
+Allow: /terms.html
+Allow: /support.html
+Allow: /tecmo.html
+
+# === CONTACT ===
+# Support page: https://smartresumeformat.com/support.html
