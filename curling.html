@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>USA vs Canada Curling – Smart Resume Format</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    :root { --accent:#1e3a5f; --accent2:#c9963a; }
+    body { font-family:'DM Sans',sans-serif; background:#06080f; -webkit-tap-highlight-color:transparent; overscroll-behavior:none; }
+    nav { display:flex; justify-content:space-between; align-items:center; padding:1.2rem 5%; background:var(--accent); position:sticky; top:0; z-index:200; }
+    .logo { font-family:'Playfair Display',serif; font-size:1.3rem; color:#fff; font-weight:700; text-decoration:none; }
+    .nav-btn { background:var(--accent2); color:#fff; padding:.5rem 1.3rem; text-decoration:none; border-radius:6px; font-weight:600; font-size:.9rem; }
+    .nav-btn:hover { opacity:.85; }
+    .game-wrapper { display:flex; flex-direction:column; align-items:center; padding:.8rem 1rem .5rem; gap:.3rem; }
+    .game-title { font-family:'Press Start 2P',monospace; color:#ffd700; font-size:clamp(.5rem,1.9vw,.85rem); text-shadow:2px 2px 0 #7a6000; text-align:center; }
+    #gameCanvas { display:block; width:100%; max-width:900px; height:auto; border:3px solid #1e3a5f; }
+    footer { text-align:center; padding:2rem; background:#1c1917; color:#78716c; font-size:.88rem; }
+    footer a { color:#a8a29e; margin:0 10px; text-decoration:none; }
+    footer a:hover { color:var(--accent2); }
+    .footer-links { margin-bottom:1rem; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="https://smartresumeformat.com" class="logo">Smart Resume Format</a>
+  <a href="https://smartresumeformat.pythonanywhere.com" class="nav-btn">Start Building</a>
+</nav>
+
+<div class="game-wrapper">
+  <div class="game-title">USA ❄ CANADA — CURLING</div>
+  <canvas id="gameCanvas" width="900" height="560"></canvas>
+</div>
+
+<footer>
+  <div class="footer-links">
+    <a href="privacy.html">Privacy Policy</a> |
+    <a href="terms.html">Terms of Service</a> |
+    <a href="support.html">Support</a>
+  </div>
+  <p>&copy; 2026 Smart Resume Format. All rights reserved.</p>
+</footer>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   USA vs CANADA CURLING  —  Nagano-style arcade curling
+
+   CONTROLS
+   ─────────────────────────────────────────────────────────────
+   SPACE        Oscillating aim → lock aim
+                Power meter → lock power
+                Sweep while stone is sliding (speeds it up)
+                Advance scoring screens
+
+   Q            Curl stone toward the top of the sheet
+   E            Curl stone toward the bottom of the sheet
+   (no key)     Let the curl timer expire = straight throw
+══════════════════════════════════════════════════════════════ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const CW=900, CH=560;
+
+// ── Layout ────────────────────────────────────────────────────
+const HUD_H = 62;
+const ICE_T = HUD_H, ICE_B = 508, ICE_L = 18, ICE_R = 882;
+const ICE_MY = (ICE_T+ICE_B)/2;   // ~285
+
+// House (far right)
+const HX=764, HY=ICE_MY;
+const R12=68, R8=46, R4=22, RBTN=7;
+
+// Hack (throwing end, left)
+const HKAX=108, HKAY=ICE_MY;
+
+// Hog line (stone must travel past this)
+const HOG_X = 300;
+
+// Stone
+const SR = 11;          // stone radius
+const FRIC = 0.9966;    // friction per frame
+
+// ── States ────────────────────────────────────────────────────
+const S = {
+  TITLE:'title', AIM:'aim', POWER:'power', CURL:'curl',
+  SLIDE:'slide', SETTLE:'settle',
+  CPU_DELAY:'cpu_delay', CPU_SLIDE:'cpu_slide',
+  END_RESULT:'end_result', OVER:'over'
+};
+let state = S.TITLE;
+
+// ── Game vars ─────────────────────────────────────────────────
+let score, currentEnd, stonesThrown, currentTeam, hammer;
+let stones, curStone, stoneTrail;
+let settleTimer, cpuDelayTimer;
+let endMsg, endSub;
+const TOTAL_ENDS = 4, STONES_PER_END = 8;
+
+// ── Aim ───────────────────────────────────────────────────────
+let aimY, aimDir, lockedAimY;
+const AIM_SPD = 2.8, AIM_MIN = ICE_MY-118, AIM_MAX = ICE_MY+118;
+
+// ── Power ─────────────────────────────────────────────────────
+let powerVal, powerDir;
+const POW_SPD = 1.1;
+
+// ── Curl ──────────────────────────────────────────────────────
+let curlTimer, chosenCurl;
+const CURL_WIN = 1.0;
+
+// ── Input ─────────────────────────────────────────────────────
+const K = {};
+window.addEventListener('keydown', e=>{
+  if(!K[e.code]){ K[e.code]=true; onPress(e.code); }
+  if(['Space','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e=>{ K[e.code]=false; });
+canvas.addEventListener('click', ()=> onPress('Space'));
+
+function onPress(c){
+  if(state===S.TITLE||state===S.OVER){ beginGame(); return; }
+  if(state===S.AIM   && c==='Space'){ lockAim();   return; }
+  if(state===S.POWER && c==='Space'){ lockPower(); return; }
+  if(state===S.CURL){
+    if(c==='KeyQ') launch(-1);
+    if(c==='KeyE') launch(1);
+    if(c==='Space') launch(0);
+  }
+  if(state===S.SLIDE && c==='Space'){ sweep(); return; }
+  if(state===S.END_RESULT && c==='Space'){ advance(); return; }
+}
+
+// ── Game setup ────────────────────────────────────────────────
+function beginGame(){
+  score={usa:0,canada:0}; currentEnd=1; hammer='canada';
+  startEnd();
+}
+
+function startEnd(){
+  stones=[]; curStone=null; stoneTrail=[];
+  stonesThrown=0;
+  currentTeam = hammer==='usa' ? 'canada' : 'usa'; // non-hammer throws first
+  startAim();
+}
+
+function startAim(){
+  aimY=ICE_MY; aimDir=1; powerVal=0; powerDir=1; chosenCurl=0;
+  state=S.AIM;
+}
+
+function lockAim(){ lockedAimY=aimY; state=S.POWER; }
+
+function lockPower(){ curlTimer=CURL_WIN; chosenCurl=0; state=S.CURL; }
+
+function launch(curl){
+  chosenCurl=curl;
+  const v0   = (powerVal/100)*2.78;
+  const dx   = HX - HKAX;
+  const dy   = lockedAimY - HKAY;
+  const dist = Math.hypot(dx,dy)||1;
+  curStone = {
+    x:HKAX, y:HKAY,
+    vx: v0*dx/dist, vy: v0*dy/dist,
+    team: currentTeam,
+    curlRate: curl * 0.008,
+    stopped:false, outOfPlay:false
+  };
+  stoneTrail=[];
+  state=S.SLIDE;
+}
+
+function sweep(){
+  if(!curStone||curStone.stopped) return;
+  const spd=Math.hypot(curStone.vx,curStone.vy);
+  if(spd>0.3){ curStone.vx*=1.014; curStone.vy*=1.014; }
+}
+
+// ── CPU AI ────────────────────────────────────────────────────
+function doCpuThrow(){
+  const usaIn = stones.filter(s=>
+    s.team==='usa'&&!s.outOfPlay&&
+    Math.hypot(s.x-HX,s.y-HY)<R12+SR
+  ).sort((a,b)=>Math.hypot(a.x-HX,a.y-HY)-Math.hypot(b.x-HX,b.y-HY));
+
+  let tgtY, pow, curl=0;
+
+  if(usaIn.length>0 && Math.random()<0.55){
+    // Takeout: aim at closest USA stone
+    const t=usaIn[0];
+    tgtY  = t.y + (Math.random()-.5)*35;
+    pow   = 86 + Math.random()*13;
+  } else {
+    // Draw: aim for house with error
+    tgtY  = HY + (Math.random()-.5)*65;
+    pow   = 78 + Math.random()*10;
+    curl  = Math.random()<0.3 ? (Math.random()<.5?-1:1) : 0;
+  }
+
+  lockedAimY = tgtY;
+  const v0   = (pow/100)*2.78;
+  const dx   = HX-HKAX, dy=tgtY-HKAY;
+  const dist = Math.hypot(dx,dy)||1;
+  curStone   = {
+    x:HKAX, y:HKAY,
+    vx:v0*dx/dist, vy:v0*dy/dist,
+    team:'canada',
+    curlRate: curl*0.008,
+    stopped:false, outOfPlay:false
+  };
+  stoneTrail=[];
+  state=S.CPU_SLIDE;
+}
+
+// ── Main loop ─────────────────────────────────────────────────
+let lastT=0;
+function loop(ts){
+  const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
+  update(dt); render();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  if(state===S.AIM){
+    aimY+=aimDir*AIM_SPD;
+    if(aimY>=AIM_MAX||aimY<=AIM_MIN) aimDir*=-1;
+  }
+  if(state===S.POWER){
+    powerVal+=powerDir*POW_SPD;
+    if(powerVal>=100){powerVal=100;powerDir=-1;}
+    if(powerVal<=0){powerVal=0;powerDir=1;}
+  }
+  if(state===S.CURL){
+    curlTimer-=dt;
+    if(curlTimer<=0) launch(0);
+  }
+  if(state===S.SLIDE||state===S.CPU_SLIDE){
+    updatePhysics();
+    updateKnocked();
+  }
+  if(state===S.SETTLE){
+    settleTimer-=dt;
+    updateKnocked();
+    if(settleTimer<=0) afterSettle();
+  }
+  if(state===S.CPU_DELAY){
+    cpuDelayTimer-=dt;
+    if(cpuDelayTimer<=0) doCpuThrow();
+  }
+}
+
+function updatePhysics(){
+  if(!curStone) return;
+  const s=curStone;
+
+  stoneTrail.push({x:s.x,y:s.y});
+  if(stoneTrail.length>20) stoneTrail.shift();
+
+  s.x+=s.vx; s.y+=s.vy;
+  s.vy+=s.curlRate; // curl drift on Y axis
+
+  // Friction
+  const spd=Math.hypot(s.vx,s.vy);
+  if(spd<0.18){ s.vx=0;s.vy=0;s.stopped=true; stoneStopped(); return; }
+  s.vx*=FRIC; s.vy*=FRIC;
+
+  // Out of play
+  if(s.x>ICE_R+30||s.y<ICE_T-12||s.y>ICE_B+12){
+    s.outOfPlay=true; s.stopped=true; stoneStopped(); return;
+  }
+
+  // Collisions with settled stones
+  stones.forEach(o=>{
+    if(o===s||o.outOfPlay) return;
+    const dx=o.x-s.x, dy=o.y-s.y, d=Math.hypot(dx,dy)||1;
+    if(d<SR*2){
+      const nx=dx/d, ny=dy/d;
+      const dvx=s.vx-o.vx, dvy=s.vy-o.vy;
+      const dot=dvx*nx+dvy*ny;
+      if(dot>0){
+        s.vx-=dot*nx; s.vy-=dot*ny;
+        o.vx+=dot*nx; o.vy+=dot*ny;
+      }
+      const ov=(SR*2-d)*0.52;
+      s.x-=nx*ov; s.y-=ny*ov;
+      o.x+=nx*ov; o.y+=ny*ov;
+    }
+  });
+}
+
+function updateKnocked(){
+  stones.forEach(s=>{
+    if(s.stopped) return;
+    const spd=Math.hypot(s.vx,s.vy);
+    if(spd<0.18){s.vx=0;s.vy=0;s.stopped=true;return;}
+    s.x+=s.vx; s.y+=s.vy;
+    s.vx*=0.972; s.vy*=0.972;
+    if(s.x>ICE_R+30||s.y<ICE_T-12||s.y>ICE_B+12) s.outOfPlay=s.stopped=true;
+  });
+}
+
+function stoneStopped(){
+  if(!curStone.outOfPlay) stones.push(curStone);
+  curStone=null; stoneTrail=[];
+  settleTimer=0.65;
+  state=S.SETTLE;
+}
+
+function afterSettle(){
+  stonesThrown++;
+  if(stonesThrown>=STONES_PER_END){ scoreEnd(); return; }
+
+  // Strict alternation; non-hammer team throws 1st,3rd,5th,7th stones
+  const nonHammer = hammer==='usa'?'canada':'usa';
+  currentTeam = (stonesThrown%2===0) ? nonHammer : hammer;
+
+  if(currentTeam==='usa'){ startAim(); }
+  else { cpuDelayTimer=1.4; state=S.CPU_DELAY; }
+}
+
+function scoreEnd(){
+  const inHouse=stones.filter(s=>
+    !s.outOfPlay && Math.hypot(s.x-HX,s.y-HY)<=R12+SR
+  ).sort((a,b)=>Math.hypot(a.x-HX,a.y-HY)-Math.hypot(b.x-HX,b.y-HY));
+
+  let pts=0, winner=null;
+  if(inHouse.length>0){
+    winner=inHouse[0].team;
+    for(const s of inHouse){ if(s.team===winner) pts++; else break; }
+    score[winner]+=pts;
+    hammer = winner==='usa'?'canada':'usa'; // loser gets hammer next end
+  }
+
+  if(winner){
+    const names={usa:'USA',canada:'CANADA'};
+    endMsg = `${names[winner]} SCORES ${pts} POINT${pts>1?'S':''}!`;
+    endSub = pts>=3?'INCREDIBLE END!'
+           : pts===2?'TWO POINTS!'
+           : 'ONE POINT — CLOSE END!';
+  } else {
+    endMsg='BLANK END';
+    endSub='No stones in the house — no score';
+  }
+  state=S.END_RESULT;
+}
+
+function advance(){
+  currentEnd++;
+  if(currentEnd>TOTAL_ENDS){ state=S.OVER; return; }
+  startEnd();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════
+function render(){
+  ctx.clearRect(0,0,CW,CH);
+  if(state===S.TITLE){ drawTitle(); return; }
+  if(state===S.OVER) { drawOver();  return; }
+  drawIce();
+  drawTrail();
+  drawAllStones();
+  if(curStone) drawStone(curStone);
+  drawHUD();
+  drawLegend();
+  if(state===S.AIM)                    drawAimUI();
+  if(state===S.POWER)                  drawPowerUI();
+  if(state===S.CURL)                   drawCurlUI();
+  if([S.CPU_DELAY,S.CPU_SLIDE].includes(state)) drawCpuUI();
+  if(state===S.END_RESULT)             drawEndResult();
+}
+
+// ── Ice ───────────────────────────────────────────────────────
+function drawIce(){
+  const g=ctx.createLinearGradient(ICE_L,ICE_T,ICE_R,ICE_B);
+  g.addColorStop(0,'#bcd6eb'); g.addColorStop(.5,'#deeef9'); g.addColorStop(1,'#bcd6eb');
+  ctx.fillStyle=g; ctx.fillRect(ICE_L,ICE_T,ICE_R-ICE_L,ICE_B-ICE_T);
+
+  // Pebble texture
+  ctx.fillStyle='rgba(170,200,228,.55)';
+  for(let i=0;i<220;i++) ctx.fillRect((i*139+7)%(ICE_R-ICE_L)+ICE_L, (i*81+4)%(ICE_B-ICE_T)+ICE_T, 1.2,1.2);
+
+  // Border
+  ctx.strokeStyle='#2676a8'; ctx.lineWidth=2;
+  ctx.strokeRect(ICE_L,ICE_T,ICE_R-ICE_L,ICE_B-ICE_T);
+
+  // Center line (dashed)
+  ctx.strokeStyle='rgba(38,118,168,.22)'; ctx.lineWidth=1;
+  ctx.setLineDash([10,8]); ln(ICE_L,HY,ICE_R,HY); ctx.setLineDash([]);
+
+  // Vertical tee line
+  ctx.strokeStyle='rgba(38,118,168,.3)'; ctx.lineWidth=1.5;
+  ln(HX,ICE_T,HX,ICE_B);
+
+  // Hog line
+  ctx.strokeStyle='rgba(220,50,47,.55)'; ctx.lineWidth=2.5;
+  ln(HOG_X,ICE_T,HOG_X,ICE_B);
+  ctx.fillStyle='rgba(220,50,47,.55)'; ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('HOG',HOG_X,ICE_T+11);
+
+  // Hack box
+  ctx.fillStyle='rgba(0,0,0,.07)'; ctx.fillRect(HKAX-16,ICE_MY-16,32,32);
+  ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1; ctx.strokeRect(HKAX-16,ICE_MY-16,32,32);
+  ctx.fillStyle='rgba(0,0,0,.4)'; ctx.font='6px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('HACK',HKAX,ICE_MY+25);
+
+  drawHouseRings();
+}
+
+function drawHouseRings(){
+  // 12-foot
+  ctx.fillStyle='#1f6dad'; ctx.beginPath(); ctx.arc(HX,HY,R12,0,Math.PI*2); ctx.fill();
+  // 8-foot
+  ctx.fillStyle='#f0f3f4'; ctx.beginPath(); ctx.arc(HX,HY,R8,0,Math.PI*2); ctx.fill();
+  // 4-foot
+  ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.arc(HX,HY,R4,0,Math.PI*2); ctx.fill();
+  // Button
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(HX,HY,RBTN,0,Math.PI*2); ctx.fill();
+  // Outlines
+  [R12,R8,R4,RBTN].forEach(r=>{
+    ctx.strokeStyle='rgba(0,0,0,.15)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(HX,HY,r,0,Math.PI*2); ctx.stroke();
+  });
+}
+
+// ── Stones ────────────────────────────────────────────────────
+function drawTrail(){
+  stoneTrail.forEach((p,i)=>{
+    const a=(i/stoneTrail.length)*.32;
+    ctx.fillStyle=`rgba(190,215,238,${a})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,SR*.55,0,Math.PI*2); ctx.fill();
+  });
+}
+
+function drawAllStones(){
+  stones.filter(s=>!s.outOfPlay).forEach(s=>drawStone(s));
+}
+
+function drawStone(s){
+  const isUSA=s.team==='usa';
+  const body  = isUSA?'#1a3c8f':'#b71c1c';
+  const ring  = isUSA?'#aec6ff':'#ffb3b3';
+  const shine = isUSA?'#4d6fd4':'#e25252';
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,.2)';
+  ctx.beginPath(); ctx.ellipse(s.x+2,s.y+3,SR,SR*.6,0,0,Math.PI*2); ctx.fill();
+
+  // Radial gradient body
+  const gr=ctx.createRadialGradient(s.x-3,s.y-3,1,s.x,s.y,SR);
+  gr.addColorStop(0,shine); gr.addColorStop(1,body);
+  ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(s.x,s.y,SR,0,Math.PI*2); ctx.fill();
+
+  // Outer ring
+  ctx.strokeStyle=ring; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(s.x,s.y,SR-2,0,Math.PI*2); ctx.stroke();
+
+  // Handle nub
+  ctx.fillStyle=ring; ctx.beginPath(); ctx.arc(s.x,s.y,3,0,Math.PI*2); ctx.fill();
+
+  // Team label
+  ctx.fillStyle='rgba(255,255,255,.85)'; ctx.font='bold 6px "DM Sans"';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(isUSA?'USA':'CAN',s.x,s.y+1);
+  ctx.textBaseline='alphabetic';
+}
+
+// ── HUD ───────────────────────────────────────────────────────
+function drawHUD(){
+  ctx.fillStyle='#06080f'; ctx.fillRect(0,0,CW,ICE_T);
+  ctx.strokeStyle='#1e3a5f'; ctx.lineWidth=2; ln(0,ICE_T,CW,ICE_T);
+
+  // USA
+  ctx.fillStyle='#1a3c8f'; rr(10,6,155,50,6); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 10px "DM Sans"'; ctx.textAlign='left';
+  ctx.fillText('USA',20,23);
+  ctx.font='bold 22px "DM Sans"'; ctx.fillText(score.usa,20,48);
+  if(hammer==='usa'){ ctx.fillStyle='#c9963a'; ctx.font='bold 8px "Press Start 2P"'; ctx.fillText('★',80,23); }
+
+  // Canada
+  ctx.fillStyle='#b71c1c'; rr(CW-165,6,155,50,6); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 10px "DM Sans"'; ctx.textAlign='right';
+  ctx.fillText('CANADA',CW-20,23);
+  ctx.font='bold 22px "DM Sans"'; ctx.fillText(score.canada,CW-20,48);
+  if(hammer==='canada'){ ctx.fillStyle='#c9963a'; ctx.font='bold 8px "Press Start 2P"'; ctx.fillText('★',CW-85,23); }
+
+  // Centre
+  ctx.fillStyle='#0f1a28'; rr(CW/2-100,6,200,50,6); ctx.fill();
+  ctx.strokeStyle='#c9963a'; ctx.lineWidth=1.5; rr(CW/2-100,6,200,50,6); ctx.stroke();
+  ctx.fillStyle='#c9963a'; ctx.font='bold 9px "DM Sans"'; ctx.textAlign='center';
+  ctx.fillText(`END ${currentEnd} / ${TOTAL_ENDS}`,CW/2,23);
+  const left=STONES_PER_END-stonesThrown;
+  ctx.fillStyle='#ccc'; ctx.font='bold 11px "DM Sans"';
+  ctx.fillText(`${left} stone${left!==1?'s':''} left`,CW/2,46);
+
+  // Who's throwing
+  if([S.AIM,S.POWER,S.CURL,S.SLIDE,S.SETTLE].includes(state)){
+    ctx.fillStyle=currentTeam==='usa'?'#4a6abf':'#ef5350';
+    ctx.font='bold 8px "Press Start 2P"'; ctx.textAlign='center';
+    ctx.fillText(`▶ ${currentTeam.toUpperCase()} THROWING`,CW/2+140,38);
+  }
+
+  // Stone count pips (right of HUD)
+  drawStonePips();
+}
+
+function drawStonePips(){
+  // Show remaining stones for each team as small colored dots
+  const usaThrown  = stones.filter(s=>s.team==='usa'&&!s.outOfPlay).length + (curStone?.team==='usa'?1:0);
+  const canThrown  = stones.filter(s=>s.team==='canada'&&!s.outOfPlay).length + (curStone?.team==='canada'?1:0);
+  const maxEach    = STONES_PER_END/2;
+
+  for(let i=0;i<maxEach;i++){
+    const px=CW-170+i*14;
+    ctx.fillStyle=i<canThrown?'#ef5350':'rgba(255,255,255,.15)';
+    ctx.beginPath(); ctx.arc(px,57,4,0,Math.PI*2); ctx.fill();
+  }
+  for(let i=0;i<maxEach;i++){
+    const px=10+i*14;
+    ctx.fillStyle=i<usaThrown?'#4a6abf':'rgba(255,255,255,.15)';
+    ctx.beginPath(); ctx.arc(px,57,4,0,Math.PI*2); ctx.fill();
+  }
+}
+
+// ── Control legend ────────────────────────────────────────────
+function drawLegend(){
+  let lines=[];
+  if(state===S.AIM)   lines=[{k:'SPACE',d:'lock aim direction'}];
+  else if(state===S.POWER) lines=[{k:'SPACE',d:'set power & release'}];
+  else if(state===S.CURL)  lines=[{k:'Q',d:'curl up'},{k:'E',d:'curl down'},{k:'SPACE',d:'no curl'}];
+  else if(state===S.SLIDE) lines=[{k:'SPACE',d:'sweep! (extends range)'}];
+  else return;
+
+  const lx=ICE_L+5, ly=ICE_T+6;
+  const lh=lines.length*17+10, lw=168;
+  ctx.fillStyle='rgba(0,0,0,.7)'; rr(lx,ly,lw,lh,5); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.lineWidth=1; rr(lx,ly,lw,lh,5); ctx.stroke();
+
+  lines.forEach(({k,d},i)=>{
+    const ty=ly+8+i*17;
+    ctx.font='bold 7px "Press Start 2P"';
+    const kw=ctx.measureText(k).width+8;
+    ctx.fillStyle='rgba(255,255,255,.13)'; rr(lx+4,ty,kw,13,3); ctx.fill();
+    ctx.fillStyle='#ffd700'; ctx.textAlign='left'; ctx.textBaseline='top'; ctx.fillText(k,lx+6,ty+2);
+    ctx.fillStyle='#999'; ctx.font='8px "DM Sans"'; ctx.fillText(d,lx+kw+8,ty+2);
+  });
+  ctx.textBaseline='alphabetic';
+}
+
+// ── Aim UI ────────────────────────────────────────────────────
+function drawAimUI(){
+  ctx.strokeStyle='rgba(255,220,50,.65)'; ctx.lineWidth=1.5;
+  ctx.setLineDash([10,7]); ln(HKAX,HKAY,ICE_R,aimY); ctx.setLineDash([]);
+
+  const p=(Math.sin(Date.now()/240)+1)/2;
+  ctx.fillStyle=`rgba(255,215,0,${.55+p*.4})`;
+  ctx.beginPath(); ctx.arc(ICE_R-8,aimY,5+p*2,0,Math.PI*2); ctx.fill();
+
+  ctx.fillStyle='rgba(0,0,0,.72)'; rr(CW/2-195,ICE_B+8,390,26,5); ctx.fill();
+  ctx.fillStyle='#ffd700'; ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('AIMING — PRESS SPACE TO LOCK DIRECTION',CW/2,ICE_B+25);
+}
+
+// ── Power UI ──────────────────────────────────────────────────
+function drawPowerUI(){
+  const bx=ICE_L+10, by=ICE_B+10, bw=ICE_R-ICE_L-20, bh=18;
+
+  // Background
+  ctx.fillStyle='rgba(0,0,0,.5)'; rr(bx,by,bw,bh,4); ctx.fill();
+
+  // Fill colour — green in sweet spot, red elsewhere
+  const col=powerVal<60?'#e74c3c': powerVal<80?'#e67e22': powerVal<94?'#27ae60':'#e74c3c';
+  ctx.fillStyle=col; rr(bx,by,bw*powerVal/100,bh,4); ctx.fill();
+
+  // Sweet spot marker
+  const sx=bx+bw*0.86;
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2;
+  ln(sx,by-5,sx,by+bh+5);
+  ctx.fillStyle='#fff'; ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('★ SWEET SPOT',sx,by+bh+20);
+
+  ctx.fillStyle='#ffd700'; ctx.font='bold 7px "Press Start 2P"';
+  ctx.fillText('POWER — PRESS SPACE TO RELEASE',CW/2,by+bh+36);
+}
+
+// ── Curl UI ───────────────────────────────────────────────────
+function drawCurlUI(){
+  ctx.fillStyle='rgba(0,0,0,.8)'; rr(CW/2-210,ICE_B+6,420,50,6); ctx.fill();
+  ctx.strokeStyle='rgba(201,150,58,.4)'; ctx.lineWidth=1; rr(CW/2-210,ICE_B+6,420,50,6); ctx.stroke();
+  ctx.fillStyle='#ffd700'; ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('Q = CURL UP    SPACE = STRAIGHT    E = CURL DOWN',CW/2,ICE_B+24);
+
+  const p=curlTimer/CURL_WIN;
+  ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(CW/2-195,ICE_B+34,390,8);
+  ctx.fillStyle='#c9963a'; ctx.fillRect(CW/2-195,ICE_B+34,390*p,8);
+}
+
+// ── CPU UI ────────────────────────────────────────────────────
+function drawCpuUI(){
+  ctx.fillStyle='rgba(183,28,28,.85)'; ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText(state===S.CPU_DELAY?'CANADA LINING UP...':'CANADA DELIVERING...',CW/2,ICE_B+24);
+}
+
+// ── End result ────────────────────────────────────────────────
+function drawEndResult(){
+  ctx.fillStyle='rgba(0,0,0,.85)';
+  rr(CW/2-225,ICE_MY-58,450,115,10); ctx.fill();
+  ctx.strokeStyle='#c9963a'; ctx.lineWidth=2;
+  rr(CW/2-225,ICE_MY-58,450,115,10); ctx.stroke();
+
+  ctx.fillStyle='#ffd700'; ctx.font='bold 11px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText(endMsg,CW/2,ICE_MY-16);
+  ctx.fillStyle='#bbb'; ctx.font='bold 7px "Press Start 2P"';
+  ctx.fillText(endSub,CW/2,ICE_MY+10);
+  ctx.fillStyle='#fff'; ctx.font='10px "DM Sans"';
+  ctx.fillText(`USA ${score.usa}  —  CANADA ${score.canada}`,CW/2,ICE_MY+32);
+
+  const p=(Math.sin(Date.now()/420)+1)/2;
+  ctx.globalAlpha=.4+p*.5; ctx.fillStyle='#aaa'; ctx.font='7px "Press Start 2P"';
+  ctx.fillText(currentEnd<TOTAL_ENDS?'PRESS SPACE — NEXT END':'PRESS SPACE — FINAL SCORE',CW/2,ICE_MY+54);
+  ctx.globalAlpha=1;
+}
+
+// ── Title ─────────────────────────────────────────────────────
+function drawTitle(){
+  ctx.fillStyle='#06080f'; ctx.fillRect(0,0,CW,CH);
+
+  // Starfield
+  for(let i=0;i<140;i++){
+    ctx.fillStyle=`rgba(255,255,255,${.04+Math.random()*.3})`;
+    ctx.fillRect((i*157)%CW,(i*97)%CH,1.5,1.5);
+  }
+
+  // Title text
+  ctx.fillStyle='#fff'; ctx.font='bold 22px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('USA  ❄  CANADA',CW/2,108);
+  ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1; ln(CW/2-180,118,CW/2+180,118);
+  ctx.fillStyle='#c9963a'; ctx.font='bold 13px "Press Start 2P"';
+  ctx.fillText('C U R L I N G',CW/2,148);
+
+  // Mini house preview
+  ctx.save(); ctx.translate(CW/2,218); const sc=0.72; ctx.scale(sc,sc);
+  ctx.fillStyle='#1f6dad'; ctx.beginPath(); ctx.arc(0,0,R12,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#f0f3f4'; ctx.beginPath(); ctx.arc(0,0,R8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#c0392b'; ctx.beginPath(); ctx.arc(0,0,R4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,0,RBTN,0,Math.PI*2); ctx.fill();
+  // Two sample stones
+  const gr1=ctx.createRadialGradient(-4,-4,1,0,0,SR); gr1.addColorStop(0,'#4d6fd4'); gr1.addColorStop(1,'#1a3c8f');
+  ctx.fillStyle=gr1; ctx.beginPath(); ctx.arc(-15,8,SR,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#aec6ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(-15,8,SR-2,0,Math.PI*2); ctx.stroke();
+  const gr2=ctx.createRadialGradient(4,-4,1,0,0,SR); gr2.addColorStop(0,'#e25252'); gr2.addColorStop(1,'#b71c1c');
+  ctx.fillStyle=gr2; ctx.beginPath(); ctx.arc(20,-12,SR,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#ffb3b3'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(20,-12,SR-2,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  // How to play box
+  ctx.fillStyle='rgba(0,0,0,.72)'; rr(CW/2-255,270,510,175,8); ctx.fill();
+  ctx.strokeStyle='rgba(201,150,58,.35)'; ctx.lineWidth=1.5; rr(CW/2-255,270,510,175,8); ctx.stroke();
+  ctx.fillStyle='#c9963a'; ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('HOW TO PLAY',CW/2,290);
+
+  const tips=[
+    ['SPACE ×2','Aim, then set power — throws straight'],
+    ['Q       ','Curl stone toward the top (up)'],
+    ['E       ','Curl stone toward the bottom (down)'],
+    ['SPACE   ','Sweep while stone slides (go farther)'],
+    ['★       ','Team with ★ in score has the HAMMER'],
+    ['GOAL    ','Closest stone to the button scores'],
+  ];
+  tips.forEach(([k,d],i)=>{
+    const ty=308+i*24;
+    ctx.fillStyle='rgba(255,255,255,.1)'; rr(CW/2-242,ty-9,140,18,3); ctx.fill();
+    ctx.fillStyle='#ffd700'; ctx.font='bold 6.5px "Press Start 2P"'; ctx.textAlign='left';
+    ctx.fillText(k,CW/2-234,ty+2);
+    ctx.fillStyle='#bbb'; ctx.font='9px "DM Sans"'; ctx.fillText(d,CW/2-90,ty+2);
+  });
+
+  const p=(Math.sin(Date.now()/450)+1)/2;
+  ctx.globalAlpha=.4+p*.55; ctx.fillStyle='#fff';
+  ctx.font='bold 7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('PRESS SPACE OR CLICK TO BEGIN',CW/2,460);
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#1c1c1c'; ctx.font='9px "DM Sans"';
+  ctx.fillText('A Smart Resume Format mini-game',CW/2,480);
+}
+
+// ── Game over ─────────────────────────────────────────────────
+function drawOver(){
+  ctx.fillStyle='#06080f'; ctx.fillRect(0,0,CW,CH);
+  for(let i=0;i<140;i++){
+    ctx.fillStyle=`rgba(255,255,255,${.04+Math.random()*.28})`;
+    ctx.fillRect((i*157)%CW,(i*97)%CH,1.5,1.5);
+  }
+
+  ctx.fillStyle='#ffd700'; ctx.font='bold 16px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('FINAL SCORE',CW/2,150);
+
+  const uw=score.usa>score.canada, tie=score.usa===score.canada;
+  ctx.fillStyle=uw?'#ffd700':tie?'#aaa':'#666';
+  ctx.font='bold 14px "Press Start 2P"'; ctx.fillText(`USA        ${score.usa}`,CW/2,210);
+  ctx.fillStyle=!uw&&!tie?'#ffd700':tie?'#aaa':'#666';
+  ctx.fillText(`CANADA     ${score.canada}`,CW/2,250);
+
+  ctx.fillStyle='#4fc3f7'; ctx.font='bold 11px "Press Start 2P"';
+  ctx.fillText(uw?'USA WINS!':tie?'TIE GAME!':'CANADA WINS!',CW/2,310);
+
+  const p=(Math.sin(Date.now()/450)+1)/2;
+  ctx.globalAlpha=.4+p*.55; ctx.fillStyle='#fff';
+  ctx.font='7px "Press Start 2P"'; ctx.fillText('PRESS SPACE OR CLICK TO PLAY AGAIN',CW/2,390);
+  ctx.globalAlpha=1;
+}
+
+// ── Utils ─────────────────────────────────────────────────────
+function ln(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+function rr(x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+// Boot
+requestAnimationFrame(ts=>{ lastT=ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>
