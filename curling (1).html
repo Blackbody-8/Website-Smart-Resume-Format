@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>USA vs Canada Curling</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;display:flex;flex-direction:column;align-items:center;
+     font-family:'Barlow Condensed',sans-serif;overflow-x:hidden;
+     -webkit-tap-highlight-color:transparent;user-select:none}
+nav{width:100%;display:flex;justify-content:space-between;align-items:center;
+    padding:.7rem 4%;background:#0d0820;border-bottom:2px solid #3a1a6e}
+.logo{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;
+      color:#e8d87a;text-decoration:none;letter-spacing:.05em}
+.nav-btn{background:#b01010;color:#fff;padding:.38rem 1rem;text-decoration:none;
+         font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;
+         border:1px solid #e03030;letter-spacing:.04em}
+.wrap{width:100%;display:flex;justify-content:center;padding:.3rem}
+#gc{display:block;width:100%;max-width:960px;height:auto;border:2px solid #1a0840}
+footer{width:100%;background:#07040f;padding:1rem;text-align:center;
+       color:#444;font-family:'Barlow',sans-serif;font-size:.75rem;margin-top:.3rem}
+footer a{color:#666;margin:0 8px;text-decoration:none}
+footer a:hover{color:#e8d87a}
+</style>
+</head>
+<body>
+<nav>
+  <a href="https://smartresumeformat.com" class="logo">Smart Resume Format</a>
+  <a href="https://smartresumeformat.pythonanywhere.com" class="nav-btn">Build Resume</a>
+</nav>
+<div class="wrap"><canvas id="gc" width="960" height="620"></canvas></div>
+<footer>
+  <a href="privacy.html">Privacy</a> | <a href="terms.html">Terms</a> | <a href="support.html">Support</a><br>
+  &copy; 2026 Smart Resume Format
+</footer>
+<script>
+/* ================================================================
+   USA vs CANADA CURLING  —  PS1 polygon-style 3D rendering
+   Controls:
+     SPACE     Step 1: lock aim  |  Step 2: release power
+               Step 3: straight throw  |  Step 4: SWEEP (mash it!)
+     ← →       Step 3: choose curl direction
+     P         Pause / resume
+================================================================ */
+const C=document.getElementById('gc'),X=C.getContext('2d');
+const W=960,H=620;
+X.imageSmoothingEnabled=true;
+
+// ── Fonts (clean, not pixel art) ──────────────────────────────
+const F={
+  hud:  '700 13px "Barlow Condensed"',
+  big:  '800 22px "Barlow Condensed"',
+  xbig: '800 32px "Barlow Condensed"',
+  huge: '800 52px "Barlow Condensed"',
+  sm:   '600 11px "Barlow Condensed"',
+  label:'700 15px "Barlow Condensed"',
+};
+
+// ── 3D Perspective setup ──────────────────────────────────────
+// View from ~1 metre behind hack, camera low (like PS1)
+const VP={x:480,y:148};   // vanishing point
+const NEAR_Y=530;          // ice at camera (screen)
+const FAR_Y  =VP.y;
+const NEAR_HW=310;         // half-width of ice at near edge (screen px)
+const FAR_HW =38;
+const WORLD_HW=155;        // world half-width (units)
+
+function proj(wx,wz){
+  const t=Math.min(Math.max(wz,0),960)/960;
+  const hw=NEAR_HW*(1-t)+FAR_HW*t;
+  const sy=NEAR_Y-(NEAR_Y-FAR_Y)*t;
+  return{x:VP.x+(wx/WORLD_HW)*hw, y:sy, t, hw, sc:hw/NEAR_HW};
+}
+function projRx(wr,wz){const t=Math.min(wz/960,1);return(wr/WORLD_HW)*(NEAR_HW*(1-t)+FAR_HW*t);}
+function projRy(wr,wz){return projRx(wr,wz)*0.55;}
+
+// World Z positions
+const Z_HACK =110;
+const Z_HOG  =290;
+const Z_HOUSE=840;
+const Z_BACK =960;
+
+// House ring world radii
+const HR=[{r:124,c:'#0a3d8f'},{r:85,c:'#e8e8e8'},{r:42,c:'#c8131a'},{r:9,c:'#fff'}];
+
+// Stone collision radius
+const SCOLL=11;
+const SVIS=14;
+
+// ── Physics ───────────────────────────────────────────────────
+const FRIC_BASE=0.9945;
+const FRIC_SWEEP=0.9968;
+let curFric=FRIC_BASE;
+
+// ── State machine ─────────────────────────────────────────────
+const S={TITLE:0,AIM:1,POW:2,CURL:3,SLIDE:4,SETTLE:5,
+         CPU_WAIT:6,CPU_SLIDE:7,SCORE:8,PAUSE:9,OVER:10,FLASH:11};
+let state=S.TITLE,prevState=S.TITLE;
+// Step-transition flash
+let flashMsg='',flashNext=S.AIM,flashT=0;
+
+// ── Game data ─────────────────────────────────────────────────
+let score={usa:0,can:0},endNum=1,thrown=0,hammer='can',team='usa';
+let stones=[],cur=null,trail=[],sparks=[],swCount=0;
+let settleT=0,cpuT=0,curlT=0;
+let endMsg='',endSub='',endHistory=[];
+const NENDS=4,NSPC=8;
+
+// Aim
+let aimA=0,aimDir=1,lockedA=0;
+const AIM_AMP=0.28,AIM_SPD=0.016;  // nice and slow
+
+// Power
+let powV=0,powDir=1;
+const POW_SPD=1.1;
+
+// Curl window
+const CURL_WIN=3.0;
+
+// Sweep
+let swFlash=0;
+// CPU sweep state
+let cpuSweepFlash=0;
+
+// ── Input ─────────────────────────────────────────────────────
+const K={};
+addEventListener('keydown',e=>{
+  if(!K[e.code]){K[e.code]=true;onKey(e.code);}
+  if(['Space','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+});
+addEventListener('keyup',e=>K[e.code]=false);
+C.addEventListener('click',()=>onKey('Space'));
+C.addEventListener('touchstart',e=>{e.preventDefault();onKey('Space');},{passive:false});
+
+function onKey(k){
+  if(k==='KeyP'){
+    if(state===S.PAUSE)state=prevState;
+    else if(state>S.TITLE&&state!==S.SCORE&&state!==S.OVER&&state!==S.FLASH){prevState=state;state=S.PAUSE;}
+    return;
+  }
+  if(state===S.PAUSE||state===S.FLASH)return;
+  if(state===S.TITLE||state===S.OVER){init();return;}
+  if(state===S.AIM  &&k==='Space'){lockAim();return;}
+  if(state===S.POW  &&k==='Space'){lockPow();return;}
+  if(state===S.CURL){
+    if(k==='ArrowLeft')launch(-1);
+    else if(k==='ArrowRight')launch(1);
+    else if(k==='Space')launch(0);
+    return;
+  }
+  if(state===S.SLIDE&&k==='Space'){sweep();return;}
+  if(state===S.SCORE&&k==='Space'){nextEnd();return;}
+}
+
+// ── Init ──────────────────────────────────────────────────────
+function init(){
+  score={usa:0,can:0};endNum=1;hammer='can';endHistory=[];
+  newEnd();
+}
+function newEnd(){
+  stones=[];cur=null;trail=[];sparks=[];
+  thrown=0;swCount=0;
+  team=hammer==='usa'?'can':'usa';
+  nextThrow();
+}
+function nextThrow(){
+  aimA=0;aimDir=1;powV=0;powDir=1;
+  curlT=CURL_WIN;swFlash=0;curFric=FRIC_BASE;swCount=0;
+  state=team==='usa'?S.AIM:(cpuT=0.9,S.CPU_WAIT);
+}
+function flash(msg, next, dur=1.1){
+  flashMsg=msg; flashNext=next; flashT=dur; state=S.FLASH;
+}
+function lockAim(){
+  lockedA=aimA; powV=0; powDir=1;
+  flash('AIM LOCKED ✓\nNow set your power!', S.POW);
+}
+function lockPow(){
+  curlT=CURL_WIN;
+  flash('POWER SET ✓\nChoose your curl spin!', S.CURL);
+}
+function launch(curl){
+  const v=(powV/100)*4.5;
+  const a=lockedA;
+  cur={wx:0,wz:Z_HACK,vx:Math.sin(a)*v,vz:Math.cos(a)*v,
+       cr:curl*0.0082,team,stopped:false,out:false};
+  trail=[];curFric=FRIC_BASE;
+  state=S.SLIDE;
+}
+function sweep(){
+  if(!cur||cur.stopped)return;
+  swCount++;swFlash=14;
+  cur.cr*=0.87;
+  curFric=FRIC_SWEEP;
+  setTimeout(()=>{if(cur)curFric=FRIC_BASE;},150);
+}
+
+// CPU auto-sweeps when stone is moving slowly (realistic: sweep when draw is short)
+let cpuSweepTimer=0;
+function cpuAutoSweep(){
+  if(!cur||cur.stopped)return;
+  cpuSweepTimer-=dt;
+  if(cpuSweepTimer>0)return;
+  cpuSweepTimer=0.22+Math.random()*0.18; // sweep every ~0.2-0.4s
+  const spd=Math.hypot(cur.vx,cur.vz);
+  // Sweep if stone has enough speed (it'll reach the house area)
+  if(spd>1.0&&Math.random()<0.72){
+    cur.cr*=0.90;
+    curFric=FRIC_SWEEP;
+    cpuSweepFlash=18;
+    setTimeout(()=>{if(cur)curFric=FRIC_BASE;},160);
+  }
+}
+function cpuLaunch(){
+  const usaIn=stones.filter(s=>!s.out&&s.team==='usa'&&hd(s)<HR[0].r+SCOLL)
+    .sort((a,b)=>hd(a)-hd(b));
+  let tx=0,sp,cr=0;
+  if(usaIn.length&&Math.random()<0.5){tx=usaIn[0].wx+(Math.random()-.5)*16;sp=87+Math.random()*12;}
+  else{tx=(Math.random()-.5)*52;sp=66+Math.random()*17;cr=Math.random()<.4?(Math.random()<.5?-1:1)*0.007:0;}
+  const a=Math.atan2(tx,Z_HOUSE-Z_HACK),v=(sp/100)*4.5;
+  cur={wx:0,wz:Z_HACK,vx:Math.sin(a)*v,vz:Math.cos(a)*v,
+       cr,team:'can',stopped:false,out:false};
+  trail=[];curFric=FRIC_BASE;
+  state=S.CPU_SLIDE;
+}
+function hd(s){return Math.hypot(s.wx,s.wz-Z_HOUSE);}
+
+// ── Physics update ────────────────────────────────────────────
+function physStep(){
+  if(!cur)return;
+  const s=cur;
+  trail.push({wx:s.wx,wz:s.wz});
+  if(trail.length>28)trail.shift();
+  s.wx+=s.vx;s.wz+=s.vz;s.vx+=s.cr;
+  const sp=Math.hypot(s.vx,s.vz);
+  if(sp<0.14){s.vx=s.vz=0;s.stopped=true;stoneDone();return;}
+  s.vx*=curFric;s.vz*=curFric;
+  if(Math.abs(s.wx)>WORLD_HW+15||s.wz>Z_BACK+30||s.wz<-20){s.out=s.stopped=true;stoneDone();return;}
+  // Elastic collisions
+  for(const o of stones){
+    if(o.out)continue;
+    const dx=o.wx-s.wx,dz=o.wz-s.wz,d=Math.hypot(dx,dz);
+    if(d===0||d>=SCOLL*2)continue;
+    const nx=dx/d,nz=dz/d,dot=(s.vx-o.vx)*nx+(s.vz-o.vz)*nz;
+    if(dot<=0)continue;
+    s.vx-=dot*nx;s.vz-=dot*nz;
+    o.vx+=dot*nx*0.93;o.vz+=dot*nz*0.93;
+    o.stopped=false;
+    const ov=(SCOLL*2-d)*0.52;
+    s.wx-=nx*ov;s.wz-=nz*ov;o.wx+=nx*ov;o.wz+=nz*ov;
+    sparks.push({wx:(s.wx+o.wx)/2,wz:(s.wz+o.wz)/2,life:16});
+  }
+}
+function settleStep(){
+  let any=false;
+  stones.forEach(s=>{
+    if(s.stopped)return;
+    any=true;
+    s.wx+=s.vx;s.wz+=s.vz;
+    s.vx*=0.9945;s.vz*=0.9945;
+    if(Math.hypot(s.vx,s.vz)<0.12){s.vx=s.vz=0;s.stopped=true;}
+    if(Math.abs(s.wx)>WORLD_HW+15||s.wz>Z_BACK+30)s.out=s.stopped=true;
+    stones.forEach(o=>{
+      if(o===s||o.out)return;
+      const dx=o.wx-s.wx,dz=o.wz-s.wz,d=Math.hypot(dx,dz);
+      if(d>0&&d<SCOLL*2){
+        const nx=dx/d,nz=dz/d,dot=(s.vx-o.vx)*nx+(s.vz-o.vz)*nz;
+        if(dot>0){s.vx-=dot*nx;s.vz-=dot*nz;o.vx+=dot*nx*.9;o.vz+=dot*nz*.9;o.stopped=false;}
+        const ov=(SCOLL*2-d)*.5;s.wx-=nx*ov;s.wz-=nz*ov;o.wx+=nx*ov;o.wz+=nz*ov;
+      }
+    });
+  });
+}
+function stoneDone(){
+  if(!cur.out)stones.push(cur);
+  cur=null;trail=[];settleT=4.0;state=S.SETTLE;
+}
+function afterSettle(){
+  thrown++;
+  if(thrown>=NSPC){endScore();return;}
+  const nh=hammer==='usa'?'can':'usa';
+  team=(thrown%2===0)?nh:hammer;
+  nextThrow();
+}
+function endScore(){
+  const inH=stones.filter(s=>!s.out&&hd(s)<=HR[0].r+SCOLL)
+    .sort((a,b)=>hd(a)-hd(b));
+  let pts=0,winner=null;
+  if(inH.length){
+    winner=inH[0].team;
+    for(const s of inH){if(s.team===winner)pts++;else break;}
+    score[winner]+=pts;
+    hammer=winner==='usa'?'can':'usa';
+  }else{hammer=hammer==='usa'?'can':'usa';}
+  endHistory.push({usa:winner==='usa'?pts:0,can:winner==='can'?pts:0});
+  endMsg=winner?`${winner.toUpperCase()} SCORES ${pts}!`:'BLANK END';
+  endSub=winner?(pts>=3?'HUGE END!!!':pts===2?'TWO POINTS!':'ONE POINT'):'No score — hammer changes';
+  state=S.SCORE;
+}
+function nextEnd(){endNum++;if(endNum>NENDS){state=S.OVER;return;}newEnd();}
+
+// ── Main loop ─────────────────────────────────────────────────
+let lt=0,dt=0;
+function loop(ts){
+  dt=Math.min((ts-lt)/1000,.05);lt=ts;
+  if(state!==S.PAUSE){
+    if(state===S.FLASH){flashT-=dt;if(flashT<=0)state=flashNext;}
+    if(state===S.AIM){aimA+=aimDir*AIM_SPD;if(Math.abs(aimA)>=AIM_AMP)aimDir*=-1;}
+    if(state===S.POW){powV+=powDir*POW_SPD;if(powV>=100){powV=100;powDir=-1;}if(powV<=0){powV=0;powDir=1;}}
+    if(state===S.CURL){curlT-=dt;if(curlT<=0)launch(0);}
+    if(swFlash>0)swFlash--;
+    if(cpuSweepFlash>0)cpuSweepFlash--;
+    sparks=sparks.filter(s=>(s.life--,s.life>0));
+    if(state===S.SLIDE)physStep();
+    if(state===S.CPU_SLIDE){physStep();cpuAutoSweep();}
+    if(state===S.SETTLE){settleT-=dt;settleStep();if(settleT<=0)afterSettle();}
+    if(state===S.CPU_WAIT){cpuT-=dt;if(cpuT<=0)cpuLaunch();}
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+
+// =================================================================
+//  RENDER — PS1 smooth polygon style
+// =================================================================
+function render(){
+  X.clearRect(0,0,W,H);
+  if(state===S.TITLE){drawTitle();return;}
+  if(state===S.OVER) {drawOver(); return;}
+
+  drawArena();
+  drawIceSurface();
+  drawIceMarkings();
+  drawHouseRings();
+  drawHackBlock();
+  if(cur||state===S.AIM||state===S.POW||state===S.CURL)drawAimGuide();
+  drawTrail();
+  // Z-sort and draw stones
+  const all=[...stones.filter(s=>!s.out)];
+  if(cur&&!cur.out)all.push(cur);
+  all.sort((a,b)=>b.wz-a.wz).forEach(s=>drawStone(s,s===cur));
+  sparks.forEach(drawSpark);
+  if(swFlash>0&&cur&&state===S.SLIDE)drawBroom('usa');
+  if(cpuSweepFlash>0&&cur&&state===S.CPU_SLIDE)drawBroom('can');
+  drawHUD();
+  drawPhaseUI();
+  if(state===S.SCORE)drawEndScore();
+  if(state===S.FLASH)drawFlash();
+  if(state===S.PAUSE)drawPause();
+}
+
+// ── Arena — smooth gradient walls ────────────────────────────
+function drawArena(){
+  // Ceiling/sky gradient — warm arena lighting, like an indoor rink
+  const cg=X.createLinearGradient(0,0,0,VP.y+10);
+  cg.addColorStop(0,'#1a0c30');
+  cg.addColorStop(.6,'#2c1850');
+  cg.addColorStop(1,'#3a2260');
+  X.fillStyle=cg;X.fillRect(0,0,W,VP.y+10);
+
+  // Arena floor sides (perspective trapezoid sides)
+  const pNL=proj(-WORLD_HW,0),pNR=proj(WORLD_HW,0);
+  const pFL=proj(-WORLD_HW,960),pFR=proj(WORLD_HW,960);
+
+  // Left stand — gradient
+  const lgL=X.createLinearGradient(0,0,pNL.x,0);
+  lgL.addColorStop(0,'#0c0820');lgL.addColorStop(1,'#1c1040');
+  X.fillStyle=lgL;
+  X.beginPath();X.moveTo(0,0);X.lineTo(pFL.x,pFL.y);X.lineTo(pNL.x,pNL.y);X.lineTo(0,NEAR_Y);X.closePath();X.fill();
+
+  // Right stand
+  const lgR=X.createLinearGradient(W,0,pNR.x,0);
+  lgR.addColorStop(0,'#0c0820');lgR.addColorStop(1,'#1c1040');
+  X.fillStyle=lgR;
+  X.beginPath();X.moveTo(W,0);X.lineTo(pFR.x,pFR.y);X.lineTo(pNR.x,pNR.y);X.lineTo(W,NEAR_Y);X.closePath();X.fill();
+
+  // Crowd dots — stands
+  for(let i=0;i<120;i++){
+    const side=i%2?1:-1;
+    const wz=80+i*7.5;
+    const wx=side*(WORLD_HW+8+(i%3)*10);
+    const p=proj(wx,wz);
+    if(p.y<4||p.y>NEAR_Y-5)continue;
+    const r=Math.max(1.5,4*p.sc);
+    const cols=['#6b3a8a','#3a4a8a','#8a3a3a','#4a7a3a','#7a5a2a'];
+    X.fillStyle=cols[i%5];
+    X.beginPath();X.arc(p.x,p.y,r,0,Math.PI*2);X.fill();
+    // Crowd highlight
+    X.fillStyle='rgba(255,240,200,.25)';
+    X.beginPath();X.arc(p.x-r*.3,p.y-r*.3,r*.45,0,Math.PI*2);X.fill();
+  }
+
+  // Overhead lights — bright points along ceiling
+  for(let i=0;i<10;i++){
+    const wz=40+i*100;
+    [-WORLD_HW+5,WORLD_HW-5].forEach(wx=>{
+      const p=proj(wx,wz);
+      const g=X.createRadialGradient(p.x,p.y-6,0,p.x,p.y-6,18*p.sc);
+      g.addColorStop(0,'rgba(255,240,200,.9)');
+      g.addColorStop(.4,'rgba(255,220,150,.3)');
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      X.fillStyle=g;
+      X.beginPath();X.arc(p.x,p.y-6,18*p.sc,0,Math.PI*2);X.fill();
+    });
+  }
+
+  // Boards (low walls at ice edge)
+  drawBoards(pNL,pNR,pFL,pFR);
+}
+
+function drawBoards(pNL,pNR,pFL,pFR){
+  // Left board face
+  X.fillStyle='#d6e8f5';
+  X.beginPath();
+  X.moveTo(pNL.x,pNL.y);X.lineTo(pFL.x,pFL.y);
+  X.lineTo(pFL.x,pFL.y-10);X.lineTo(pNL.x,pNL.y-14);
+  X.closePath();X.fill();
+  X.strokeStyle='rgba(0,0,80,.3)';X.lineWidth=1;X.stroke();
+
+  // Right board face
+  X.fillStyle='#d6e8f5';
+  X.beginPath();
+  X.moveTo(pNR.x,pNR.y);X.lineTo(pFR.x,pFR.y);
+  X.lineTo(pFR.x,pFR.y-10);X.lineTo(pNR.x,pNR.y-14);
+  X.closePath();X.fill();
+  X.strokeStyle='rgba(0,0,80,.3)';X.lineWidth=1;X.stroke();
+}
+
+// ── Ice surface — smooth gradient with specular sheen ─────────
+function drawIceSurface(){
+  const pNL=proj(-WORLD_HW,0),pNR=proj(WORLD_HW,0);
+  const pFL=proj(-WORLD_HW,960),pFR=proj(WORLD_HW,960);
+
+  // Base ice colour — gradient from near (lighter) to far (darker, atmospheric)
+  const ig=X.createLinearGradient(0,VP.y,0,NEAR_Y);
+  ig.addColorStop(0,'#8ab8d8');
+  ig.addColorStop(.4,'#b0d0e8');
+  ig.addColorStop(.75,'#c8dff0');
+  ig.addColorStop(1,'#daeaf8');
+  X.fillStyle=ig;
+  X.beginPath();
+  X.moveTo(pNL.x,pNL.y);X.lineTo(pNR.x,pNR.y);
+  X.lineTo(pFR.x,pFR.y);X.lineTo(pFL.x,pFL.y);
+  X.closePath();X.fill();
+
+  // Specular highlight — streak of light down the centre
+  const sg=X.createLinearGradient(W/2-60,0,W/2+60,0);
+  sg.addColorStop(0,'rgba(255,255,255,0)');
+  sg.addColorStop(.5,'rgba(255,255,255,.18)');
+  sg.addColorStop(1,'rgba(255,255,255,0)');
+  X.fillStyle=sg;
+  X.beginPath();
+  X.moveTo(pNL.x,pNL.y);X.lineTo(pNR.x,pNR.y);
+  X.lineTo(pFR.x,pFR.y);X.lineTo(pFL.x,pFL.y);
+  X.closePath();X.fill();
+
+  // Ice border
+  X.strokeStyle='rgba(20,60,120,.5)';X.lineWidth=2;
+  X.beginPath();
+  X.moveTo(pNL.x,pNL.y);X.lineTo(pNR.x,pNR.y);
+  X.lineTo(pFR.x,pFR.y);X.lineTo(pFL.x,pFL.y);
+  X.closePath();X.stroke();
+}
+
+// ── Ice markings ──────────────────────────────────────────────
+function drawIceMarkings(){
+  // Centre line
+  X.strokeStyle='rgba(40,80,160,.25)';X.lineWidth=1.5;X.setLineDash([12,8]);
+  const cN=proj(0,0),cF=proj(0,960);
+  X.beginPath();X.moveTo(cN.x,cN.y);X.lineTo(cF.x,cF.y);X.stroke();
+  X.setLineDash([]);
+
+  // Hog line — red, solid
+  const hL=proj(-WORLD_HW,Z_HOG),hR=proj(WORLD_HW,Z_HOG);
+  X.strokeStyle='#d01818';X.lineWidth=3;
+  X.beginPath();X.moveTo(hL.x,hL.y);X.lineTo(hR.x,hR.y);X.stroke();
+
+  // Tee line (vertical through house centre)
+  X.strokeStyle='rgba(40,80,160,.2)';X.lineWidth=1;
+  const tN=proj(0,Z_HOUSE-150),tF=proj(0,Z_HOUSE+100);
+  X.beginPath();X.moveTo(tN.x,tN.y);X.lineTo(tF.x,tF.y);X.stroke();
+}
+
+// ── House rings — PS1 smooth ellipses ─────────────────────────
+function drawHouseRings(){
+  const pc=proj(0,Z_HOUSE);
+  HR.forEach(({r,c})=>{
+    const rx=projRx(r,Z_HOUSE), ry=projRy(r,Z_HOUSE);
+    // Gouraud-style: radial gradient on each ring
+    if(c!=='#fff'&&c!=='#e8e8e8'){
+      X.fillStyle=c;
+      X.beginPath();X.ellipse(pc.x,pc.y,rx,ry,0,0,Math.PI*2);X.fill();
+    } else {
+      // White ring — subtle gradient
+      const wg=X.createRadialGradient(pc.x-rx*.2,pc.y-ry*.3,0,pc.x,pc.y,rx);
+      wg.addColorStop(0,'#ffffff');wg.addColorStop(1,'#d0dde8');
+      X.fillStyle=wg;
+      X.beginPath();X.ellipse(pc.x,pc.y,rx,ry,0,0,Math.PI*2);X.fill();
+    }
+    X.strokeStyle='rgba(0,0,0,.2)';X.lineWidth=1;
+    X.beginPath();X.ellipse(pc.x,pc.y,rx,ry,0,0,Math.PI*2);X.stroke();
+  });
+  // Crosshair on button
+  X.strokeStyle='rgba(0,0,0,.3)';X.lineWidth=1;
+  const bRx=projRx(HR[0].r,Z_HOUSE),bRy=projRy(HR[0].r,Z_HOUSE);
+  X.beginPath();X.moveTo(pc.x-bRx,pc.y);X.lineTo(pc.x+bRx,pc.y);X.stroke();
+  X.beginPath();X.moveTo(pc.x,pc.y-bRy*2.2);X.lineTo(pc.x,pc.y+bRy*2.2);X.stroke();
+}
+
+// ── Hack ──────────────────────────────────────────────────────
+function drawHackBlock(){
+  const ph=proj(0,Z_HACK);
+  const hw=12,hh=5;
+  X.fillStyle='#6a7e90';
+  X.fillRect(ph.x-hw,ph.y-hh,hw*2,hh*2);
+  X.strokeStyle='rgba(200,220,240,.6)';X.lineWidth=1;
+  X.strokeRect(ph.x-hw,ph.y-hh,hw*2,hh*2);
+}
+
+// ── Aim guide ─────────────────────────────────────────────────
+function drawAimGuide(){
+  const a=(state===S.POW||state===S.CURL)?lockedA:aimA;
+  X.strokeStyle='rgba(255,210,40,.5)';X.lineWidth=2;X.setLineDash([10,7]);
+  X.beginPath();
+  for(let i=0;i<=20;i++){
+    const t=i/20,wz=Z_HACK+(Z_HOUSE+80-Z_HACK)*t,wx=Math.tan(a)*(wz-Z_HACK);
+    if(Math.abs(wx)>WORLD_HW)break;
+    const p=proj(wx,wz);
+    i===0?X.moveTo(p.x,p.y):X.lineTo(p.x,p.y);
+  }
+  X.stroke();X.setLineDash([]);
+  // Arrow head pulse at target
+  if(state===S.AIM){
+    const endWz=Math.min(Z_HOUSE+50,940);
+    const endWx=Math.tan(a)*(endWz-Z_HACK);
+    if(Math.abs(endWx)<=WORLD_HW){
+      const pp=proj(endWx,endWz);
+      const pu=(Math.sin(Date.now()/200)+1)/2;
+      const g=X.createRadialGradient(pp.x,pp.y,0,pp.x,pp.y,10+pu*4);
+      g.addColorStop(0,`rgba(255,210,40,${.8+pu*.15})`);
+      g.addColorStop(1,'rgba(255,210,40,0)');
+      X.fillStyle=g;
+      X.beginPath();X.arc(pp.x,pp.y,10+pu*4,0,Math.PI*2);X.fill();
+    }
+  }
+}
+
+// ── Trail ─────────────────────────────────────────────────────
+function drawTrail(){
+  if(!cur)return;
+  const col=cur.team==='usa'?[50,100,220]:[200,40,40];
+  trail.forEach((t,i)=>{
+    const p=proj(t.wx,t.wz);
+    const a=(i/trail.length)*0.45;
+    X.fillStyle=`rgba(${col.join()},${a})`;
+    X.beginPath();X.ellipse(p.x,p.y,3*p.sc,2*p.sc,0,0,Math.PI*2);X.fill();
+  });
+}
+
+// ── Stone — PS1 smooth shaded "granite" puck ─────────────────
+function drawStone(s,moving){
+  const p=proj(s.wx,s.wz);
+  if(p.y<VP.y)return;
+  const rx=projRx(SVIS,s.wz);
+  const ry=rx*0.6;
+  const usa=s.team==='usa';
+
+  // Stone shadow (soft ellipse on ice)
+  const shg=X.createRadialGradient(p.x+rx*.15,p.y+ry*.4,0,p.x+rx*.15,p.y+ry*.4,rx*1.2);
+  shg.addColorStop(0,'rgba(0,0,0,.35)');
+  shg.addColorStop(1,'rgba(0,0,0,0)');
+  X.fillStyle=shg;
+  X.beginPath();X.ellipse(p.x+rx*.15,p.y+ry*.5,rx*1.1,ry*.8,0,0,Math.PI*2);X.fill();
+
+  // Stone body — Gouraud gradient (light comes from top-left, like PS1)
+  const lightX=p.x-rx*.35, lightY=p.y-ry*.5;
+  const sg=X.createRadialGradient(lightX,lightY,0,p.x,p.y,rx*1.1);
+  if(usa){
+    sg.addColorStop(0,'#5577ff');   // highlight
+    sg.addColorStop(.35,'#1a44cc'); // midtone
+    sg.addColorStop(.75,'#0a2280'); // dark
+    sg.addColorStop(1,'#060e44');   // shadow edge
+  }else{
+    sg.addColorStop(0,'#ff5555');
+    sg.addColorStop(.35,'#cc1a1a');
+    sg.addColorStop(.75,'#880a0a');
+    sg.addColorStop(1,'#440606');
+  }
+  X.fillStyle=sg;
+  X.beginPath();X.ellipse(p.x,p.y,rx,ry,0,0,Math.PI*2);X.fill();
+
+  // Stone "granite" surface — subtle noise ring
+  X.strokeStyle=usa?'rgba(100,140,255,.5)':'rgba(255,100,100,.5)';
+  X.lineWidth=moving?2:1.5;
+  X.beginPath();X.ellipse(p.x,p.y,rx*.78,ry*.78,0,0,Math.PI*2);X.stroke();
+
+  // Specular highlight — single bright spot (very PS1)
+  const hg=X.createRadialGradient(lightX,lightY,0,lightX,lightY,rx*.45);
+  hg.addColorStop(0,'rgba(255,255,255,.75)');
+  hg.addColorStop(1,'rgba(255,255,255,0)');
+  X.fillStyle=hg;
+  X.beginPath();X.ellipse(lightX,lightY,rx*.42,ry*.42,0,0,Math.PI*2);X.fill();
+
+  // Team label — clean, readable
+  const fs=Math.max(7,Math.round(rx*.55));
+  X.font=`700 ${fs}px "Barlow Condensed"`;
+  X.textAlign='center';X.textBaseline='middle';
+  X.fillStyle='rgba(255,255,255,.9)';
+  X.fillText(usa?'USA':'CAN',p.x,p.y+1);
+  X.textBaseline='alphabetic';
+
+  // Moving glow ring
+  if(moving){
+    const gg=X.createRadialGradient(p.x,p.y,rx,p.x,p.y,rx+8);
+    gg.addColorStop(0,usa?'rgba(80,150,255,.5)':'rgba(255,80,80,.5)');
+    gg.addColorStop(1,'rgba(0,0,0,0)');
+    X.fillStyle=gg;
+    X.beginPath();X.ellipse(p.x,p.y,rx+8,ry+6,0,0,Math.PI*2);X.fill();
+  }
+}
+
+// ── Spark ─────────────────────────────────────────────────────
+function drawSpark(sp){
+  const p=proj(sp.wx,sp.wz);
+  const a=sp.life/16, r=projRx(18,sp.wz)*a;
+  for(let i=0;i<8;i++){
+    const ang=i/8*Math.PI*2+(1-a)*2;
+    const ex=p.x+Math.cos(ang)*r, ey=p.y+Math.sin(ang)*r*.5;
+    const sg=X.createLinearGradient(p.x,p.y,ex,ey);
+    sg.addColorStop(0,`rgba(255,230,80,${a})`);
+    sg.addColorStop(1,'rgba(255,100,0,0)');
+    X.strokeStyle=sg;X.lineWidth=2;
+    X.beginPath();X.moveTo(p.x,p.y);X.lineTo(ex,ey);X.stroke();
+  }
+}
+
+// ── Broom ─────────────────────────────────────────────────────
+function drawBroom(sweepTeam){
+  if(!cur)return;
+  const p=proj(cur.wx,cur.wz);
+  const sc=p.sc;
+  const t=Date.now()/60;
+  const isLeft=(sweepTeam==='usa'); // USA sweeps left side, Canada sweeps right
+  X.save();X.translate(p.x,p.y);
+  for(let b=0;b<2;b++){
+    const side=isLeft?-1:1;
+    const ox=side*(14+b*18)*sc, yo=Math.sin(t+b*1.8)*8*sc;
+    // Broom handle gradient — slightly different tones per team
+    const hg=X.createLinearGradient(ox,yo-16*sc,ox+side*5*sc,yo+10*sc);
+    hg.addColorStop(0,isLeft?'#d0a050':'#c06040');
+    hg.addColorStop(1,isLeft?'#6a4010':'#5a2008');
+    X.strokeStyle=hg;X.lineWidth=3.5*sc;
+    X.beginPath();X.moveTo(ox,yo-16*sc);X.lineTo(ox+side*5*sc,yo+10*sc);X.stroke();
+    // Broom head
+    X.fillStyle=isLeft?'rgba(190,165,90,.85)':'rgba(190,110,80,.85)';
+    X.beginPath();
+    X.ellipse(ox+side*5*sc,yo+12*sc,7*sc,3*sc,-0.3,0,Math.PI*2);
+    X.fill();
+    // Ice chips flying off
+    for(let c=0;c<3;c++){
+      X.fillStyle=`rgba(200,230,248,${.45+c*.1})`;
+      X.beginPath();X.arc(ox+(c-1)*4*sc*side,yo+15*sc,1.8*sc,0,Math.PI*2);X.fill();
+    }
+  }
+  X.restore();
+  // Flash text
+  const flashVal=isLeft?swFlash:cpuSweepFlash;
+  const flashMax=isLeft?14:18;
+  if(flashVal>0){
+    const fa=flashVal/flashMax;
+    const rx=projRx(SVIS,cur.wz);
+    X.font=`800 ${Math.round(13*p.sc+8)}px "Barlow Condensed"`;
+    X.textAlign='center';
+    X.fillStyle=`rgba(255,240,80,${fa})`;
+    X.fillText('SWEEP!',p.x+(isLeft?-1:1)*rx*1.4,p.y-rx-8);
+  }
+}
+
+// ── HUD — PS1 grid scoreboard ─────────────────────────────────
+function drawHUD(){
+  // Semi-transparent panel
+  const SBX=180,SBY=3,SBW=600,SBH=62;
+  X.fillStyle='rgba(8,4,20,.82)';
+  X.fillRect(SBX,SBY,SBW,SBH);
+  X.strokeStyle='rgba(100,60,200,.6)';X.lineWidth=1.5;
+  X.strokeRect(SBX,SBY,SBW,SBH);
+
+  // Header
+  X.fillStyle='rgba(20,5,50,.9)';X.fillRect(SBX,SBY,SBW,18);
+  const cols=[SBX+8,SBX+155,SBX+210,SBX+265,SBX+320,SBX+SBW-55];
+  const hdrs=['COUNTRY  \\  TURN','1','2','3','4','TOTAL'];
+  X.font=F.sm;X.fillStyle='#ccaaff';
+  hdrs.forEach((h,i)=>{X.textAlign=i===0?'left':'center';X.fillText(h,cols[i],SBY+13);});
+
+  // USA row
+  const uy=SBY+18;
+  X.fillStyle='rgba(0,10,60,.7)';X.fillRect(SBX,uy,SBW,22);
+  drawFlag(SBX+6,uy+3,'usa');
+  X.font=F.label;X.textAlign='left';X.fillStyle='#aabbff';
+  X.fillText('P1  USA',SBX+32,uy+15);
+  for(let e=0;e<NENDS;e++){
+    const v=endHistory[e]?.usa;
+    X.font=F.hud;X.textAlign='center';
+    X.fillStyle=v!==undefined?'#fff':'rgba(100,120,200,.4)';
+    X.fillText(v!==undefined?String(v):'-',cols[e+1],uy+15);
+  }
+  X.font=`800 16px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#ffdd44';
+  X.fillText(score.usa,cols[5],uy+15);
+  if(hammer==='usa'){X.fillStyle='#ffdd44';X.font=F.sm;X.fillText('★',SBX+SBW-18,uy+15);}
+
+  // Canada row
+  const cy=SBY+40;
+  X.fillStyle='rgba(50,5,5,.7)';X.fillRect(SBX,cy,SBW,22);
+  drawFlag(SBX+6,cy+3,'can');
+  X.font=F.label;X.textAlign='left';X.fillStyle='#ffaaaa';
+  X.fillText('CPU  CANADA',SBX+32,cy+15);
+  for(let e=0;e<NENDS;e++){
+    const v=endHistory[e]?.can;
+    X.font=F.hud;X.textAlign='center';
+    X.fillStyle=v!==undefined?'#fff':'rgba(200,80,80,.4)';
+    X.fillText(v!==undefined?String(v):'-',cols[e+1],cy+15);
+  }
+  X.font=`800 16px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#ffdd44';
+  X.fillText(score.can,cols[5],cy+15);
+  if(hammer==='can'){X.fillStyle='#ffdd44';X.font=F.sm;X.fillText('★',SBX+SBW-18,cy+15);}
+
+  // Current end highlight box
+  if(endNum<=NENDS){
+    X.strokeStyle='rgba(255,220,40,.7)';X.lineWidth=1.5;
+    X.strokeRect(cols[endNum]-14,SBY+18,28,44);
+  }
+
+  // Left panel: stones remaining + team
+  X.fillStyle='rgba(8,4,20,.82)';X.fillRect(2,3,170,62);
+  X.strokeStyle='rgba(100,60,200,.6)';X.lineWidth=1;X.strokeRect(2,3,170,62);
+  const left=NSPC-thrown;
+  X.font=F.sm;X.textAlign='left';X.fillStyle='#ccaaff';X.fillText('STONES LEFT',8,16);
+  X.font=`800 24px "Barlow Condensed"`;X.fillStyle='#fff';X.fillText(left,8,42);
+  X.font=F.sm;X.fillStyle=team==='usa'?'#6688ff':'#ff6655';
+  X.fillText(`▶ ${team.toUpperCase()} THROWS`,8,58);
+  // Stone pips
+  const ud=stones.filter(s=>s.team==='usa').length+(cur?.team==='usa'?1:0);
+  const cd=stones.filter(s=>s.team==='can').length+(cur?.team==='can'?1:0);
+  for(let i=0;i<NSPC/2;i++){
+    X.fillStyle=i<ud?'#3355ee':'rgba(40,55,140,.3)';
+    X.fillRect(90+i*13,22,10,8);
+    X.fillStyle=i<cd?'#ee3333':'rgba(140,40,40,.3)';
+    X.fillRect(90+i*13,34,10,8);
+  }
+
+  // Right panel: end info
+  X.fillStyle='rgba(8,4,20,.82)';X.fillRect(SBX+SBW+5,3,165,62);
+  X.strokeStyle='rgba(100,60,200,.6)';X.lineWidth=1;X.strokeRect(SBX+SBW+5,3,165,62);
+  X.font=F.sm;X.textAlign='left';X.fillStyle='#ccaaff';
+  X.fillText(`END ${endNum} OF ${NENDS}`,SBX+SBW+12,16);
+  X.font=`800 11px "Barlow Condensed"`;X.fillStyle='#ffdd44';
+  X.fillText(hammer==='usa'?'★ USA HAMMER':'★ CAN HAMMER',SBX+SBW+12,34);
+  X.font=F.sm;X.fillStyle='#aaaaaa';
+  X.fillText('P = PAUSE',SBX+SBW+12,54);
+}
+
+function drawFlag(x,y,t){
+  if(t==='usa'){
+    X.fillStyle='#b22234';X.fillRect(x,y,22,14);
+    X.fillStyle='#fff';[1,3,5,7,9,11].forEach(r=>X.fillRect(x,y+r,22,1));
+    X.fillStyle='#3c3b6e';X.fillRect(x,y,10,7);
+    X.fillStyle='#fff';[[1,1],[3,1],[5,1],[7,1],[2,3],[4,3],[6,3],[1,5],[3,5],[5,5],[7,5]].forEach(([cx,cy])=>X.fillRect(x+cx,y+cy,1,1));
+  }else{
+    X.fillStyle='#cc1111';X.fillRect(x,y,22,14);
+    X.fillStyle='#fff';X.fillRect(x+7,y,8,14);X.fillRect(x,y+4,22,6);
+    X.fillStyle='#cc1111';X.fillRect(x+9,y+5,4,4);
+  }
+}
+
+// ── Phase UI — bottom bar ─────────────────────────────────────
+function drawPhaseUI(){
+  const BY=NEAR_Y, BH=H-NEAR_Y;
+  X.fillStyle='rgba(8,4,22,.94)';X.fillRect(0,BY,W,BH);
+  X.strokeStyle='rgba(80,40,160,.6)';X.lineWidth=2;
+  X.beginPath();X.moveTo(0,BY);X.lineTo(W,BY);X.stroke();
+
+  // ── AIM ─────────────────────────────────────────────────────
+  if(state===S.AIM){
+    // Triangle arrow on ice surface at near edge
+    const aSwX=VP.x+Math.tan(aimA)*200;
+    X.fillStyle='rgba(255,215,40,.95)';
+    X.beginPath();X.moveTo(aSwX,NEAR_Y-4);
+    X.lineTo(aSwX-13,NEAR_Y+18);X.lineTo(aSwX+13,NEAR_Y+18);
+    X.closePath();X.fill();
+
+    // Step badge
+    stepBadge(BY+8,'1','AIM','#2255cc');
+    X.font=`800 24px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle='#ffe055';X.fillText('Watch the arrow swing left and right',W/2,BY+32);
+    X.font=`600 17px "Barlow Condensed"`;X.fillStyle='#ddd';
+    X.fillText('Press  SPACE  when arrow points where you want to throw',W/2,BY+52);
+  }
+
+  // ── POWER ────────────────────────────────────────────────────
+  if(state===S.POW){
+    stepBadge(BY+4,'2','POWER','#996600');
+    // Bar — sits in lower portion
+    const bx=14,bw=W-28,bh=22,barY=BY+46;
+    // Colour zones
+    [[0,.5,'#6a1500'],[.5,.76,'#8a4400'],[.76,.91,'#005a1a'],[.91,1,'#770000']].forEach(([f,t,c])=>{
+      X.fillStyle=c;X.fillRect(bx+bw*f,barY,bw*(t-f),bh);
+    });
+    // Sheen
+    const sg=X.createLinearGradient(0,barY,0,barY+bh);
+    sg.addColorStop(0,'rgba(255,255,255,.2)');sg.addColorStop(1,'rgba(0,0,0,.1)');
+    X.fillStyle=sg;X.fillRect(bx,barY,bw,bh);
+    // Dark unfilled part
+    X.fillStyle='rgba(0,0,0,.8)';
+    X.fillRect(bx+bw*(powV/100),barY,bw*(1-powV/100),bh);
+    // Border
+    X.strokeStyle='rgba(200,150,255,.35)';X.lineWidth=1;X.strokeRect(bx,barY,bw,bh);
+    // Sweet spot marker
+    const sx=bx+bw*.87;
+    X.strokeStyle='rgba(255,255,120,.9)';X.lineWidth=2.5;
+    X.beginPath();X.moveTo(sx,barY-6);X.lineTo(sx,barY+bh+6);X.stroke();
+    X.font=`700 12px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle='rgba(255,255,100,.85)';X.fillText('★ SWEET SPOT',sx,barY-8);
+    // Label + percentage
+    X.font=`800 18px "Barlow Condensed"`;X.fillStyle='#ffe055';X.textAlign='left';
+    X.fillText('Press  SPACE  to release',bx,BY+32);
+    X.font=`800 22px "Barlow Condensed"`;X.fillStyle='#fff';X.textAlign='right';
+    X.fillText(`${Math.round(powV)}%`,W-bx,BY+32);
+  }
+
+  // ── CURL ────────────────────────────────────────────────────
+  if(state===S.CURL){
+    stepBadge(BY+8,'3','CURL SPIN','#880066');
+    // Timer bar
+    const p=curlT/CURL_WIN;
+    X.fillStyle='rgba(80,0,140,.4)';X.fillRect(14,BY+46,W-28,16);
+    X.fillStyle='rgba(160,40,255,.65)';X.fillRect(14,BY+46,(W-28)*p,16);
+    X.strokeStyle='rgba(150,40,255,.35)';X.lineWidth=1;X.strokeRect(14,BY+46,W-28,16);
+
+    X.font=`700 19px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#ddd';
+    X.fillText('←  Curl Left     |     SPACE  No Spin     |     →  Curl Right',W/2,BY+36);
+  }
+
+  // ── SLIDE / SWEEP ────────────────────────────────────────────
+  if(state===S.SLIDE){
+    const pu=(Math.sin(Date.now()/200)+1)/2;
+    // Pulsing background hint
+    X.fillStyle=`rgba(255,235,0,${.04+pu*.07})`;X.fillRect(0,BY,W,BH);
+    stepBadge(BY+8,'4','SWEEP!','#885500');
+    X.font=`800 22px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle=`rgba(255,235,80,${.8+pu*.2})`;
+    X.fillText('Mash  SPACE  to sweep the ice!',W/2,BY+34);
+    X.font=`600 15px "Barlow Condensed"`;X.fillStyle='#aaa';
+    const spd=cur?Math.round(Math.hypot(cur.vx,cur.vz)*10)/10:0;
+    X.fillText(`Sweeps: ${swCount}   ·   Sweeping makes the stone go farther and straighter`,W/2,BY+54);
+  }
+
+  // ── SETTLE ───────────────────────────────────────────────────
+  if(state===S.SETTLE){
+    X.font=`700 18px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle='rgba(160,160,190,.65)';X.fillText('Stones settling...',W/2,BY+BH/2+5);
+  }
+
+  // ── CPU TURNS ────────────────────────────────────────────────
+  if(state===S.CPU_WAIT){
+    X.font=`800 24px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle='#ff8866';X.fillText('CANADA is choosing their shot...',W/2,BY+BH/2+6);
+  }
+  if(state===S.CPU_SLIDE){
+    X.font=`800 22px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle='#ff6644';X.fillText('CANADA delivering!',W/2,BY+20);
+    X.font=`600 15px "Barlow Condensed"`;X.fillStyle='#ffaaaa';
+    X.fillText('Watch their sweepers work the ice',W/2,BY+42);
+  }
+  if(state===S.FLASH){
+    X.font=`600 14px "Barlow Condensed"`;X.textAlign='center';
+    X.fillStyle='rgba(150,150,180,.5)';X.fillText('Get ready...',W/2,BY+BH/2+4);
+  }
+}
+
+function stepBadge(y, num, label, col){
+  // Coloured number badge on the left + big label
+  X.fillStyle=col;X.fillRect(10,y,46,34);
+  X.font=`800 22px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#fff';
+  X.fillText(num,33,y+24);
+  X.font=`800 22px "Barlow Condensed"`;X.textAlign='left';X.fillStyle='#fff';
+  X.fillText(`STEP ${num}  —  ${label}`,64,y+24);
+}
+
+// ── End score overlay ─────────────────────────────────────────
+function drawEndScore(){
+  X.fillStyle='rgba(0,0,0,.86)';X.fillRect(0,VP.y,W,NEAR_Y-VP.y);
+  // Glowing border
+  const og=X.createLinearGradient(0,0,W,0);
+  og.addColorStop(0,'rgba(255,200,30,0)');og.addColorStop(.5,'rgba(255,200,30,.7)');og.addColorStop(1,'rgba(255,200,30,0)');
+  X.strokeStyle=og;X.lineWidth=2;
+  const oy=VP.y+16,oh=NEAR_Y-VP.y-32;
+  X.strokeRect(24,oy,W-48,oh);
+  const mid=VP.y+(NEAR_Y-VP.y)/2;
+  X.font=`800 36px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#ffe055';
+  X.fillText(endMsg,W/2,mid-18);
+  X.font=`700 18px "Barlow Condensed"`;X.fillStyle='#fff';
+  X.fillText(endSub,W/2,mid+10);
+  X.font=`700 15px "Barlow Condensed"`;X.fillStyle='#88aaff';
+  X.fillText(`USA  ${score.usa}    —    CANADA  ${score.can}`,W/2,mid+34);
+  const pu=(Math.sin(Date.now()/380)+1)/2;
+  X.globalAlpha=.35+pu*.6;X.font=`600 13px "Barlow Condensed"`;X.fillStyle='#ccc';
+  X.fillText(endNum<NENDS?'Press SPACE — Next End':'Press SPACE — Final Score',W/2,mid+58);
+  X.globalAlpha=1;
+}
+
+// ── Step transition flash ──────────────────────────────────────
+function drawFlash(){
+  // Semi-transparent overlay over ice
+  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(0,VP.y,W,NEAR_Y-VP.y);
+  const mid=VP.y+(NEAR_Y-VP.y)/2;
+  // Glowing box
+  X.fillStyle='rgba(10,5,30,.92)';X.fillRect(W/2-260,mid-68,520,136);
+  X.strokeStyle='rgba(80,220,80,.8)';X.lineWidth=2.5;X.strokeRect(W/2-260,mid-68,520,136);
+  // Tick mark
+  X.font=`800 42px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#44ff88';
+  X.fillText('✓',W/2,mid-10);
+  // Message lines
+  const lines=flashMsg.split('\n');
+  X.font=`800 22px "Barlow Condensed"`;X.fillStyle='#ffffff';
+  X.fillText(lines[0],W/2,mid+24);
+  if(lines[1]){X.font=`600 16px "Barlow Condensed"`;X.fillStyle='#aaddff';X.fillText(lines[1],W/2,mid+46);}
+  // Progress bar (shrinks as flashT counts down)
+  const pct=flashT/1.1;
+  X.fillStyle='rgba(255,255,255,.12)';X.fillRect(W/2-200,mid+58,400,6);
+  X.fillStyle='rgba(80,220,80,.6)';X.fillRect(W/2-200,mid+58,400*Math.min(pct,1),6);
+}
+
+// ── Pause ─────────────────────────────────────────────────────
+function drawPause(){
+  X.fillStyle='rgba(0,0,0,.78)';X.fillRect(0,0,W,H);
+  const bx=W/2-180,by=H/2-80,bw=360,bh=160;
+  X.fillStyle='rgba(12,4,30,.95)';X.fillRect(bx,by,bw,bh);
+  X.strokeStyle='rgba(100,50,220,.8)';X.lineWidth=2;X.strokeRect(bx,by,bw,bh);
+  X.font=`800 36px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#ffe055';
+  X.fillText('PAUSED',W/2,H/2-20);
+  X.font=`600 16px "Barlow Condensed"`;X.fillStyle='#aaa';
+  X.fillText('Press  P  to resume',W/2,H/2+22);
+}
+
+// ── Title screen ──────────────────────────────────────────────
+function drawTitle(){
+  // Dark rink ambient
+  X.fillStyle='#07030f';X.fillRect(0,0,W,H);
+  // Faint stars
+  for(let i=0;i<180;i++){
+    X.fillStyle=`rgba(255,255,255,${.03+(i%8)*.03})`;
+    X.beginPath();X.arc((i*193)%W,(i*127)%H*.55,i%11===0?1.5:.7,0,Math.PI*2);X.fill();
+  }
+  // Preview ice in background
+  X.save();X.translate(0,60);X.scale(.65,.65);X.globalAlpha=.5;
+  drawArena();drawIceSurface();drawIceMarkings();drawHouseRings();
+  X.restore();X.globalAlpha=1;
+  // Dark overlay
+  X.fillStyle='rgba(7,3,18,.72)';X.fillRect(0,0,W,H);
+
+  // Title
+  X.fillStyle='rgba(12,6,32,.92)';X.fillRect(W/2-320,36,640,118);
+  X.strokeStyle='rgba(100,50,220,.7)';X.lineWidth=2;X.strokeRect(W/2-320,36,640,118);
+  X.font=`800 38px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#ffffff';
+  X.fillText('USA  vs  CANADA',W/2,92);
+  X.font=`700 22px "Barlow Condensed"`;X.fillStyle='#e8d87a';
+  X.fillText('C U R L I N G',W/2,130);
+
+  // How to play
+  X.fillStyle='rgba(10,4,24,.9)';X.fillRect(W/2-330,168,660,256);
+  X.strokeStyle='rgba(80,30,180,.5)';X.lineWidth=1.5;X.strokeRect(W/2-330,168,660,256);
+  X.font=`700 15px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#cc99ff';
+  X.fillText('HOW  TO  PLAY',W/2,188);
+
+  const tips=[
+    ['STEP 1','SPACE','Watch the aim arrow swing — press SPACE to lock your direction'],
+    ['STEP 2','SPACE','Power bar charges fast — press SPACE to release (hit the green zone!)'],
+    ['STEP 3','← →  ','Give the stone spin:  ← left curl,  → right curl,  SPACE = straight'],
+    ['STEP 4','SPACE','MASH SPACE while stone is moving — sweeping the ice makes it go farther!'],
+    ['PAUSE ','P    ','Pause and resume at any time during the game'],
+    ['GOAL  ','     ','Closest stone to the centre button scores. Knock theirs away!'],
+  ];
+  tips.forEach(([lbl,key,desc],i)=>{
+    const ty=204+i*34;
+    X.fillStyle=i%2===0?'rgba(50,20,100,.35)':'rgba(35,10,70,.35)';
+    X.fillRect(W/2-322,ty,644,28);
+    X.font=`700 14px "Barlow Condensed"`;X.textAlign='left';X.fillStyle='#e8d87a';
+    X.fillText(lbl,W/2-314,ty+18);
+    X.fillStyle='#88aaff';X.fillText(key,W/2-232,ty+18);
+    X.fillStyle='#dddddd';X.font=`600 13px "Barlow Condensed"`;X.fillText(desc,W/2-170,ty+18);
+  });
+
+  const pu=(Math.sin(Date.now()/440)+1)/2;
+  X.globalAlpha=.35+pu*.6;X.font=`800 18px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#fff';
+  X.fillText('PRESS  SPACE  OR  CLICK  TO  BEGIN',W/2,444);
+  X.globalAlpha=1;
+  X.font=`400 12px "Barlow"`;X.fillStyle='#333';
+  X.fillText('A Smart Resume Format mini-game',W/2,464);
+}
+
+// ── Game over ─────────────────────────────────────────────────
+function drawOver(){
+  X.fillStyle='#07030f';X.fillRect(0,0,W,H);
+  for(let i=0;i<180;i++){
+    X.fillStyle=`rgba(255,255,255,${.03+(i%8)*.03})`;
+    X.beginPath();X.arc((i*193)%W,(i*127)%H*.55,i%11===0?1.5:.7,0,Math.PI*2);X.fill();
+  }
+  X.font=`800 40px "Barlow Condensed"`;X.textAlign='center';X.fillStyle='#e8d87a';
+  X.fillText('FINAL  SCORE',W/2,130);
+  X.fillStyle='rgba(12,6,32,.9)';X.fillRect(W/2-200,152,400,148);
+  X.strokeStyle='rgba(100,50,220,.6)';X.lineWidth=2;X.strokeRect(W/2-200,152,400,148);
+  const uw=score.usa>score.can,tie=score.usa===score.can;
+  X.font=`800 28px "Barlow Condensed"`;
+  X.fillStyle=uw?'#88aaff':'#888';X.fillText(`USA          ${score.usa}`,W/2,200);
+  X.fillStyle=!uw&&!tie?'#ff8888':'#888';X.fillText(`CANADA    ${score.can}`,W/2,248);
+  X.font=`800 26px "Barlow Condensed"`;X.fillStyle='#fff';
+  X.fillText(uw?'USA  WINS!':tie?'TIE  GAME!':'CANADA  WINS!',W/2,304);
+  const pu=(Math.sin(Date.now()/440)+1)/2;
+  X.globalAlpha=.35+pu*.6;X.font=`600 15px "Barlow Condensed"`;X.fillStyle='#aaa';
+  X.fillText('Press SPACE or click to play again',W/2,380);
+  X.globalAlpha=1;
+}
+
+requestAnimationFrame(ts=>{lt=ts;requestAnimationFrame(loop);});
+</script>
+</body>
+</html>
