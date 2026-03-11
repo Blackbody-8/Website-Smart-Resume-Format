@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Hilyard Street Hospital — Smart Resume Format</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;display:flex;flex-direction:column;align-items:center;
+     font-family:'Barlow Condensed',sans-serif;overflow:hidden;height:100vh;
+     -webkit-tap-highlight-color:transparent;user-select:none}
+nav{width:100%;display:flex;justify-content:space-between;align-items:center;
+    padding:.6rem 4%;background:#0d0820;border-bottom:2px solid #3a1a6e;flex-shrink:0}
+.logo{font-size:1rem;font-weight:700;color:#e8d87a;text-decoration:none;letter-spacing:.05em}
+.nav-btn{background:#b01010;color:#fff;padding:.3rem .9rem;text-decoration:none;
+         font-weight:700;font-size:.8rem;border:1px solid #e03030}
+.wrap{flex:1;display:flex;justify-content:center;align-items:center;width:100%;padding:.2rem}
+#gc{display:block;max-width:100%;max-height:100%;border:2px solid #1a0840}
+</style>
+</head>
+<body>
+<nav>
+  <a href="https://smartresumeformat.com" class="logo">Smart Resume Format</a>
+  <a href="https://smartresumeformat.pythonanywhere.com" class="nav-btn">Build Resume</a>
+</nav>
+<div class="wrap"><canvas id="gc"></canvas></div>
+<script>
+/*
+  HILYARD STREET HOSPITAL  —  PS1-style FPS survival horror
+  =========================================
+  W / ↑        Move forward
+  S / ↓        Move backward
+  A / ←        Turn left
+  D / →        Turn right
+  SPACE        Attack / interact
+  E            Pick up item
+  P            Pause
+  CLICK        Attack (mouse)
+  TOUCH        Virtual joystick (mobile)
+*/
+
+// ── Canvas setup ──────────────────────────────────────────────
+const C=document.getElementById('gc');
+const X=C.getContext('2d');
+// PS1 low-res render buffer — intentionally low resolution
+const RW=320, RH=200;
+C.width=RW; C.height=RH;
+// Display size
+function resize(){
+  const wr=window.innerWidth, wh=window.innerHeight-C.parentElement.offsetTop-4;
+  const scale=Math.min(wr/RW, wh/RH);
+  C.style.width=Math.floor(RW*scale)+'px';
+  C.style.height=Math.floor(RH*scale)+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+X.imageSmoothingEnabled=false;
+
+// ── Level definitions ─────────────────────────────────────────
+// map cells: 1=wall 0=floor 2=locked door 3=exit 4=key 5=health
+const MAPW=24,MAPH=18;
+const LEVELS=[
+  { // ─ LEVEL 0: INTAKE WARD ─ L-shape corridor ─
+    name:'INTAKE WARD',
+    map:[
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,0,4,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+    playerStart:{x:1.5,y:1.5,angle:0},
+    lights:[{x:6,y:2},{x:16,y:2},{x:21,y:7},{x:16,y:7},{x:21,y:13},{x:6,y:15}],
+    enemyDefs:[
+      {x:8.5,y:2.5,health:2,state:'patrol',patrolAngle:0},
+      {x:21.5,y:7.5,health:2,state:'patrol',patrolAngle:Math.PI},
+    ],
+    itemDefs:[
+      {type:'key',x:14.5,y:7.5},
+      {type:'health',x:21.5,y:5.5},
+    ],
+  },
+  { // ─ LEVEL 1: SURGERY WING ─ wide centre room ─
+    name:'SURGERY WING',
+    map:[
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,0,4,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,2,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+    playerStart:{x:1.5,y:1.5,angle:0},
+    lights:[{x:8,y:2},{x:18,y:2},{x:21,y:6},{x:15,y:9},{x:4,y:12},{x:2,y:14}],
+    enemyDefs:[
+      {x:10.5,y:2.5,health:2,state:'patrol',patrolAngle:0},
+      {x:21.5,y:6.5,health:2,state:'patrol',patrolAngle:Math.PI},
+      {x:14.5,y:9.5,health:3,state:'idle',patrolAngle:Math.PI/2},
+    ],
+    itemDefs:[
+      {type:'key',x:12.5,y:9.5},
+      {type:'health',x:21.5,y:5.5},
+      {type:'health',x:4.5,y:12.5},
+    ],
+  },
+  { // ─ LEVEL 2: THE BASEMENT ─ two descents, tight chokepoints ─
+    name:'THE BASEMENT',
+    map:[
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
+      [1,1,0,0,1,0,4,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
+      [1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
+      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+    playerStart:{x:1.5,y:1.5,angle:0},
+    lights:[{x:10,y:2},{x:3,y:6},{x:10,y:6},{x:21,y:7},{x:21,y:12},{x:8,y:15}],
+    enemyDefs:[
+      {x:6.5,y:2.5,health:2,state:'patrol',patrolAngle:0},
+      {x:3.5,y:6.5,health:3,state:'idle',patrolAngle:Math.PI},
+      {x:10.5,y:6.5,health:3,state:'patrol',patrolAngle:Math.PI/2},
+      {x:21.5,y:11.5,health:3,state:'patrol',patrolAngle:Math.PI*1.5},
+    ],
+    itemDefs:[
+      {type:'key',x:6.5,y:6.5},
+      {type:'health',x:10.5,y:7.5},
+      {type:'health',x:21.5,y:5.5},
+    ],
+  },
+];
+
+let currentLevel=0;
+let MAP=LEVELS[0].map.map(r=>[...r]);
+
+function mapAt(x,y){
+  const mx=Math.floor(x),my=Math.floor(y);
+  if(mx<0||mx>=MAPW||my<0||my>=MAPH)return 1;
+  return MAP[my][mx];
+}
+function isWall(x,y){const c=mapAt(x,y);return c===1||c===2;}
+
+// Wall texture colours
+const WALL_COLS=[
+  null,
+  // 1 = grimy hospital tile — dirty green-grey
+  {light:'#6a7a68',dark:'#3a4a38',ns:'#52625e',ew:'#323e30'},
+  // 2 = locked door — dark rust metal
+  {light:'#663a1a',dark:'#3a1a08',ns:'#4a2810',ew:'#2e1808'},
+  // 3 = exit — faint sickly green glow
+  {light:'#1a9a3a',dark:'#0e5a22',ns:'#148030',ew:'#0a4818'},
+];
+
+let LIGHT_SOURCES=LEVELS[0].lights;
+let lightFlicker=LIGHT_SOURCES.map(()=>1.0);
+
+// ── Player ────────────────────────────────────────────────────
+const player={
+  x:1.5, y:1.5,
+  angle:0,
+  speed:0, turnSpeed:0,
+  health:100, maxHealth:100,
+  hasKey:false,
+  stamina:100,
+};
+const MOVE_SPD=0.09;
+const TURN_SPD=0.072;
+const FOV=Math.PI/3;
+const HALF_FOV=FOV/2;
+const RAYS=RW;
+
+// these are populated by loadLevel()
+let items=[];
+let enemies=[];
+let bloodDecals=[];  // world-space blood puddles {wx,wy,r,a}
+const ENEMY_SPD=0.022;
+const ENEMY_SIGHT=7;
+const ENEMY_ATK_RANGE=0.85;
+const ENEMY_ATK_CD=1.8; // seconds between attacks
+let enemyAtkTimers=enemies.map(()=>0);
+
+// ── Weapon bob ────────────────────────────────────────────────
+let weaponBobT=0;
+let weaponBobAmt=0;
+let weaponKick=0;
+let weaponSway=0;
+
+// ── Camera head bob ───────────────────────────────────────────
+let camBobT=0, camBobAmt=0;
+
+// ── Screen shake ──────────────────────────────────────────────
+let shakeMag=0, shakeX=0, shakeY=0;
+
+// ── Blood splats ──────────────────────────────────────────────
+let bloodSplats=[];  // {x,y,r,a} screen-space splats that fade
+
+let flashlight={battery:100, on:true, flicker:0};
+const FLASH_DRAIN=0.003;
+
+// ── Raycaster ─────────────────────────────────────────────────
+// Returns array of {dist, wallType, side, wallX} per column
+function castRays(){
+  const results=[];
+  for(let col=0;col<RAYS;col++){
+    const rayAngle=player.angle - HALF_FOV + (col/RAYS)*FOV;
+    const rdx=Math.cos(rayAngle), rdy=Math.sin(rayAngle);
+    let mapX=Math.floor(player.x), mapY=Math.floor(player.y);
+    // DDA
+    const deltaX=Math.abs(1/rdx)||1e30, deltaY=Math.abs(1/rdy)||1e30;
+    let stepX,stepY,sideDistX,sideDistY;
+    if(rdx<0){stepX=-1;sideDistX=(player.x-mapX)*deltaX;}
+    else{stepX=1;sideDistX=(mapX+1-player.x)*deltaX;}
+    if(rdy<0){stepY=-1;sideDistY=(player.y-mapY)*deltaY;}
+    else{stepY=1;sideDistY=(mapY+1-player.y)*deltaY;}
+    let hit=false,side=0,wallType=1;
+    for(let i=0;i<64&&!hit;i++){
+      if(sideDistX<sideDistY){sideDistX+=deltaX;mapX+=stepX;side=0;}
+      else{sideDistY+=deltaY;mapY+=stepY;side=1;}
+      const c=mapAt(mapX,mapY);
+      if(c>=1&&c<=3){hit=true;wallType=c;}
+    }
+    let dist;
+    if(side===0) dist=sideDistX-deltaX;
+    else         dist=sideDistY-deltaY;
+    // Wall X coordinate (for texture variation)
+    let wallX;
+    if(side===0) wallX=(player.y+dist*rdy)-Math.floor(player.y+dist*rdy);
+    else         wallX=(player.x+dist*rdx)-Math.floor(player.x+dist*rdx);
+    results.push({dist:Math.max(0.01,dist),wallType,side,wallX});
+  }
+  return results;
+}
+
+// ── Sprite projection ─────────────────────────────────────────
+function projectSprite(sx,sy){
+  const dx=sx-player.x, dy=sy-player.y;
+  // Rotate into camera space
+  const invDet=1/(Math.cos(player.angle)*Math.sin(player.angle+Math.PI/2)-
+                   Math.sin(player.angle)*Math.cos(player.angle+Math.PI/2));
+  // Simpler: use angle difference
+  const spriteDist=Math.hypot(dx,dy);
+  const spriteAngle=Math.atan2(dy,dx)-player.angle;
+  // Normalise angle
+  let a=spriteAngle;
+  while(a>Math.PI)a-=Math.PI*2;
+  while(a<-Math.PI)a+=Math.PI*2;
+  if(Math.abs(a)>HALF_FOV*1.5)return null;
+  const screenX=Math.floor((0.5+a/FOV)*RW);
+  const h=Math.floor(RH/spriteDist);
+  return{screenX,dist:spriteDist,h,a};
+}
+
+// ── Zbuffer ───────────────────────────────────────────────────
+let zBuf=new Float32Array(RAYS);
+
+// ── States ────────────────────────────────────────────────────
+const S={TITLE:0,INTRO:5,PLAY:1,PAUSE:2,DEAD:3,WIN:4};
+let state=S.TITLE;
+let introTimer=0;
+
+// ── Input ─────────────────────────────────────────────────────
+const K={};
+addEventListener('keydown',e=>{
+  K[e.code]=true;
+  if(e.code==='KeyP'){togglePause();e.preventDefault();}
+  if(e.code==='Space'&&state===S.PLAY){doAttack();e.preventDefault();}
+  if(e.code==='KeyE'&&state===S.PLAY){tryPickup();}
+  if((e.code==='Space'||e.code==='Enter')&&(state===S.TITLE||state===S.DEAD||state===S.WIN)){startGame();}
+  if((e.code==='Space'||e.code==='Enter')&&state===S.INTRO){state=S.PLAY;}
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+});
+addEventListener('keyup',e=>K[e.code]=false);
+C.addEventListener('click',e=>{
+  if(state===S.TITLE||state===S.DEAD||state===S.WIN){startGame();return;}
+  if(state===S.INTRO){state=S.PLAY;return;}
+  if(state===S.PLAY)doAttack();
+});
+
+// ── Dual-zone touch controls ──────────────────────────────────
+// Left half  = joystick (move + turn)
+// Right half = attack button
+const touches={};  // id -> {sx,sy,cx,cy,side}
+let joystick={active:false,sx:0,sy:0,cx:0,cy:0};
+let atkBtn={active:false};
+
+function canvasPos(touch){
+  const rect=C.getBoundingClientRect();
+  const scale=RW/rect.width;
+  return{x:(touch.clientX-rect.left)*scale, y:(touch.clientY-rect.top)*scale};
+}
+
+C.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  // If 2+ fingers — user is pinching/zooming, never start game or move
+  if(e.touches.length>=2)return;
+  if(state===S.TITLE||state===S.DEAD||state===S.WIN){startGame();return;}
+  if(state===S.INTRO){state=S.PLAY;return;}
+  if(state!==S.PLAY)return;
+  for(const t of e.changedTouches){
+    const p=canvasPos(t);
+    const side=p.x<RW/2?'left':'right';
+    touches[t.identifier]={...p,sx:p.x,sy:p.y,side};
+    if(side==='left'){joystick={active:true,sx:p.x,sy:p.y,cx:p.x,cy:p.y};}
+    else{atkBtn.active=true;}
+  }
+},{passive:false});
+
+C.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(e.touches.length>=2)return; // ignore pinch moves
+  for(const t of e.changedTouches){
+    const p=canvasPos(t);
+    const td=touches[t.identifier];
+    if(!td)continue;
+    td.cx=p.x;td.cy=p.y;
+    if(td.side==='left'){joystick.cx=p.x;joystick.cy=p.y;}
+  }
+},{passive:false});
+
+C.addEventListener('touchend',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    const td=touches[t.identifier];
+    if(!td)continue;
+    if(td.side==='right'){
+      doAttack();
+      atkBtn.active=false;
+    }
+    if(td.side==='left'){joystick.active=false;}
+    delete touches[t.identifier];
+  }
+},{passive:false});
+
+// ── Game logic ────────────────────────────────────────────────
+let attackFlash=0, damageFlash=0, hurtTimer=0;
+let gameTime=0, score=0, kills=0;
+
+function loadLevel(n){
+  const lv=LEVELS[n];
+  MAP=lv.map.map(r=>[...r]);
+  LIGHT_SOURCES=lv.lights;
+  lightFlicker=LIGHT_SOURCES.map(()=>1.0);
+  player.x=lv.playerStart.x; player.y=lv.playerStart.y; player.angle=lv.playerStart.angle;
+  player.health=Math.min(player.maxHealth,player.health||100); player.hasKey=false;
+  items=lv.itemDefs.map(it=>({...it,alive:true}));
+  enemies=lv.enemyDefs.map(e=>({
+    x:e.x,y:e.y,angle:e.patrolAngle,
+    state:e.state,health:e.health,
+    alertTimer:0,hitFlash:0,patrolAngle:e.patrolAngle,
+    deathTimer:0
+  }));
+  enemyAtkTimers=enemies.map(()=>0);
+  kills=0; msgTimer=0;
+  bloodDecals=[];
+}
+
+function startGame(){
+  currentLevel=0;
+  player.health=100;
+  score=0; kills=0;
+  flashlight.battery=100; flashlight.on=true; flashlight.flicker=0;
+  attackFlash=0; damageFlash=0; hurtTimer=0; gameTime=0;
+  shakeMag=0; shakeX=0; shakeY=0; bloodSplats=[];
+  camBobT=0; camBobAmt=0; weaponBobT=0; weaponBobAmt=0; weaponKick=0; weaponSway=0;
+  joystick={active:false,sx:0,sy:0,cx:0,cy:0};
+  atkBtn={active:false};
+  loadLevel(0);
+  introTimer=0;
+  state=S.INTRO;
+}
+
+function togglePause(){
+  if(state===S.PLAY)state=S.PAUSE;
+  else if(state===S.PAUSE)state=S.PLAY;
+}
+
+function doAttack(){
+  if(state!==S.PLAY)return;
+  attackFlash=8;
+  weaponKick=9;  // kick gun upward on fire
+  // Check if any enemy is in front within range
+  enemies.forEach((e,i)=>{
+    if(e.health<=0)return;
+    const dx=e.x-player.x, dy=e.y-player.y;
+    const dist=Math.hypot(dx,dy);
+    if(dist>2.2)return;
+    const ang=Math.atan2(dy,dx)-player.angle;
+    let a=ang;while(a>Math.PI)a-=Math.PI*2;while(a<-Math.PI)a+=Math.PI*2;
+    if(Math.abs(a)<FOV/2){
+      e.health--;
+      e.hitFlash=14;
+      e.state='chase';
+      // World-space blood puddle where enemy stands
+      for(let b=0;b<4;b++) bloodDecals.push({
+        wx:e.x+(Math.random()-.5)*0.6,
+        wy:e.y+(Math.random()-.5)*0.6,
+        r:0.2+Math.random()*0.3, a:1.0
+      });
+      // Screen splatter
+      for(let b=0;b<5;b++) bloodSplats.push({
+        x:RW/2+(Math.random()-.5)*55, y:RH/2+(Math.random()-.5)*35,
+        r:2+Math.random()*7, a:0.65+Math.random()*.3
+      });
+      if(e.health<=0){e.state='dead';kills++;score+=100;showMsg('+100  ENEMY DOWN');}
+    }
+  });
+}
+
+function tryPickup(){
+  items.forEach(it=>{
+    if(!it.alive)return;
+    if(Math.hypot(it.x-player.x,it.y-player.y)>1.0)return;
+    if(it.type==='key'){player.hasKey=true;it.alive=false;showMsg('KEY OBTAINED');}
+    if(it.type==='health'){player.health=Math.min(player.maxHealth,player.health+30);it.alive=false;showMsg('+30 HEALTH');}
+  });
+}
+
+let msgText='',msgTimer=0;
+function showMsg(t){msgText=t;msgTimer=2.5;}
+
+// ── Main loop ─────────────────────────────────────────────────
+let lt=0,dt=0;
+function loop(ts){
+  dt=Math.min((ts-lt)/1000,.05);lt=ts;
+  if(state===S.PLAY||state===S.INTRO){
+    gameTime+=dt;
+    if(state===S.PLAY){
+      handleMovement();
+      updateFlashlight();
+      updateEnemies();
+      tryPickup(); // auto-pickup on proximity — no button needed
+      if(attackFlash>0)attackFlash--;
+      if(damageFlash>0)damageFlash--;
+      if(msgTimer>0)msgTimer-=dt;
+      shakeMag=Math.max(0,shakeMag-dt*22);
+      shakeX=(Math.random()-.5)*shakeMag*2;
+      shakeY=(Math.random()-.5)*shakeMag*2;
+      bloodSplats=bloodSplats.filter(b=>(b.a-=dt*0.35,b.a>0));
+      bloodDecals=bloodDecals.filter(b=>(b.a-=dt*0.04,b.a>0.05)); // fade slowly
+      lightFlicker=lightFlicker.map(v=>{
+        if(Math.random()<0.025)return Math.random()<0.12?0.15:0.8+Math.random()*.2;
+        return v+(1.0-v)*0.1;
+      });
+      if(mapAt(player.x,player.y)===3){
+        score+=500;
+        if(currentLevel<LEVELS.length-1){
+          currentLevel++;
+          loadLevel(currentLevel);
+          showMsg(`LEVEL ${currentLevel+1}: ${LEVELS[currentLevel].name}`);
+        } else {
+          state=S.WIN;
+        }
+      }
+    }
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+
+function handleMovement(){
+  let fw=0,turn=0;
+  // Keyboard
+  if(K['KeyW']||K['ArrowUp'])fw=1;
+  if(K['KeyS']||K['ArrowDown'])fw=-1;
+  if(K['KeyA']||K['ArrowLeft'])turn=-1;
+  if(K['KeyD']||K['ArrowRight'])turn=1;
+  // Left joystick
+  if(joystick.active){
+    const dx=joystick.cx-joystick.sx, dy=joystick.cy-joystick.sy;
+    const d=Math.hypot(dx,dy);
+    if(d>6){
+      fw=-dy/Math.max(d,1);   // up = forward
+      turn=dx/Math.max(d,1);  // left/right = turn
+    }
+  }
+  // Apply
+  if(turn!==0)player.angle+=turn*TURN_SPD;
+  if(fw!==0){
+    const nx=player.x+Math.cos(player.angle)*fw*MOVE_SPD;
+    const ny=player.y+Math.sin(player.angle)*fw*MOVE_SPD;
+    if(!isWall(nx,player.y))player.x=nx;
+    if(!isWall(player.x,ny))player.y=ny;
+  }
+  // Camera head bob
+  const isMoving=(fw!==0), isTurning=(turn!==0);
+  if(isMoving){
+    camBobAmt=Math.min(1,camBobAmt+dt*5);
+    camBobT+=dt*9;
+  } else {
+    camBobAmt=Math.max(0,camBobAmt-dt*8);
+  }
+  if(isMoving||isTurning){
+    weaponBobAmt=Math.min(1, weaponBobAmt+dt*4);
+    weaponBobT+=dt*8;
+  } else {
+    weaponBobAmt=Math.max(0, weaponBobAmt-dt*6);
+  }
+  // Decay kick
+  weaponKick=Math.max(0, weaponKick-dt*18);
+  weaponSway += (isTurning ? turn*0.6 : -weaponSway*0.12) * dt * 10;
+  // Unlock door
+  if(player.hasKey){
+    const mx=Math.floor(player.x), my=Math.floor(player.y);
+    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy])=>{
+      if(mapAt(mx+dx,my+dy)===2){MAP[my+dy][mx+dx]=0;player.hasKey=false;showMsg('DOOR UNLOCKED');}
+    });
+  }
+}
+
+function updateFlashlight(){
+  if(flashlight.on){
+    flashlight.battery=Math.max(0,flashlight.battery-FLASH_DRAIN);
+    if(flashlight.battery<15){flashlight.flicker=Math.random()<0.15?1:0;}
+    else flashlight.flicker=0;
+    if(flashlight.battery===0)flashlight.on=false;
+  }
+}
+
+function updateEnemies(){
+  enemies.forEach((e,i)=>{
+    if(e.state==='dead')return;
+    if(e.hitFlash>0)e.hitFlash--;
+    enemyAtkTimers[i]=Math.max(0,enemyAtkTimers[i]-dt);
+
+    const dx=player.x-e.x, dy=player.y-e.y;
+    const distToPlayer=Math.hypot(dx,dy);
+
+    // Can enemy see player?
+    const canSee=distToPlayer<ENEMY_SIGHT && hasLOS(e.x,e.y,player.x,player.y);
+
+    if(canSee){e.state='chase';e.alertTimer=3.0;}
+    else if(e.alertTimer>0){e.alertTimer-=dt;}
+    else if(e.state==='chase'){e.state='patrol';}
+
+    if(e.state==='chase'||e.alertTimer>0){
+      // Move toward player
+      const ang=Math.atan2(dy,dx);
+      const nx=e.x+Math.cos(ang)*ENEMY_SPD;
+      const ny=e.y+Math.sin(ang)*ENEMY_SPD;
+      if(!isWall(nx,e.y))e.x=nx;
+      if(!isWall(e.x,ny))e.y=ny;
+      e.angle=ang;
+      // Attack player
+      if(distToPlayer<ENEMY_ATK_RANGE&&enemyAtkTimers[i]<=0){
+        player.health-=12;
+        damageFlash=14;
+        shakeMag=5; // shake screen on hit
+        hurtTimer=0.4;
+        enemyAtkTimers[i]=ENEMY_ATK_CD;
+        if(player.health<=0){player.health=0;state=S.DEAD;}
+      }
+    } else if(e.state==='patrol'){
+      // Simple patrol: turn and walk
+      e.patrolAngle+=0.008;
+      const nx=e.x+Math.cos(e.patrolAngle)*ENEMY_SPD*0.5;
+      const ny=e.y+Math.sin(e.patrolAngle)*ENEMY_SPD*0.5;
+      if(!isWall(nx,e.y))e.x=nx; else e.patrolAngle+=Math.PI*0.5;
+      if(!isWall(e.x,ny))e.y=ny;
+      e.angle=e.patrolAngle;
+    }
+  });
+}
+
+function hasLOS(x1,y1,x2,y2){
+  const dx=x2-x1,dy=y2-y1,dist=Math.hypot(dx,dy);
+  const steps=Math.ceil(dist*4);
+  for(let i=1;i<steps;i++){
+    const t=i/steps;
+    if(isWall(x1+dx*t,y1+dy*t))return false;
+  }
+  return true;
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function render(){
+  X.fillStyle='#000';X.fillRect(0,0,RW,RH);
+  if(state===S.TITLE){drawTitle();return;}
+  if(state===S.DEAD) {drawDead(); return;}
+  if(state===S.WIN)  {drawWin();  return;}
+
+  // Screen shake applied to 3D world only
+  X.save();
+  X.translate(Math.round(shakeX), Math.round(shakeY));
+  drawWorld();
+  drawSprites();
+  X.restore();
+
+  drawFlashlight();
+  drawBloodSplats();
+  drawColorGrade();
+  drawHUD();
+  drawMobileControls();
+  drawMessages();
+  if(state===S.INTRO)drawIntro();
+  if(state===S.PAUSE)drawPause();
+  drawVHS();
+}
+
+// ── World rendering ───────────────────────────────────────────
+function drawWorld(){
+  // Apply camera head-bob vertical offset to horizon line
+  const bobOffset=Math.sin(camBobT)*3.5*camBobAmt;
+
+  // Ceiling — near black concrete, slightly lighter at horizon
+  const cg=X.createLinearGradient(0,0,0,RH/2+bobOffset);
+  cg.addColorStop(0,'#0e0c0a');cg.addColorStop(1,'#1e1c18');
+  X.fillStyle=cg;X.fillRect(0,0,RW,RH/2+bobOffset);
+
+  // Floor — very dark worn linoleum
+  const fg=X.createLinearGradient(0,RH/2+bobOffset,0,RH);
+  fg.addColorStop(0,'#1a1812');fg.addColorStop(1,'#0e0c08');
+  X.fillStyle=fg;X.fillRect(0,RH/2+bobOffset,RW,RH/2-bobOffset);
+
+  const rays=castRays();
+
+  for(let col=0;col<RAYS;col++){
+    const {dist,wallType,side,wallX}=rays[col];
+    zBuf[col]=dist;
+
+    const lineH=Math.floor(RH/dist);
+    const drawStart=Math.max(0,Math.floor((RH+bobOffset*2-lineH)/2));
+    const drawEnd  =Math.min(RH-1,Math.floor((RH+bobOffset*2+lineH)/2));
+
+    const wc=WALL_COLS[Math.min(wallType,WALL_COLS.length-1)]||WALL_COLS[1];
+    const baseCol=side===0?(wallX>0.5?wc.light:wc.ns):(wallX>0.5?wc.ew:wc.dark);
+    const r0=parseInt(baseCol.slice(1,3),16);
+    const g0=parseInt(baseCol.slice(3,5),16);
+    const b0=parseInt(baseCol.slice(5,7),16);
+
+    // ── Per-column lighting ──────────────────────────────────
+    // 1. Ambient — dim flickering emergency fluorescents
+    let ambient=0.30;
+
+    // 2. Nearest overhead light contribution
+    let lightAdd=0;
+    LIGHT_SOURCES.forEach((ls,li)=>{
+      const ldx=ls.x+0.5-player.x, ldy=ls.y+0.5-player.y;
+      const ldist=Math.hypot(ldx,ldy);
+      if(ldist>10)return;
+      const rayAngle=player.angle - HALF_FOV + (col/RAYS)*FOV;
+      const toLight=Math.atan2(ldy,ldx);
+      let da=toLight-rayAngle;
+      while(da>Math.PI)da-=Math.PI*2;
+      while(da<-Math.PI)da+=Math.PI*2;
+      if(Math.abs(da)>Math.PI*0.7)return;
+      const falloff=Math.max(0, 1-(ldist+dist*0.4)/9);
+      lightAdd+=falloff*lightFlicker[li]*0.65;
+    });
+
+    // 3. Flashlight — wide readable cone
+    let flAdd=0;
+    if(flashlight.on&&!flashlight.flicker){
+      const edgeFrac=Math.abs((col/RW)-0.5)*2;
+      const cone=Math.max(0,1-edgeFrac*edgeFrac*1.4);
+      const distFade=Math.max(0,1-dist/13);
+      flAdd=cone*distFade*0.9;
+    }
+
+    // 4. Combine — ambient keeps it always readable
+    const distShade=Math.max(0.2, 1-dist/16);
+    const bright=Math.min(1, (ambient + lightAdd + flAdd) * distShade);
+
+    // Cold hospital tint — slightly push green channel
+    const r=Math.min(255,Math.floor(r0*bright*0.85));
+    const g=Math.min(255,Math.floor(g0*bright*1.05));
+    const b=Math.min(255,Math.floor(b0*bright*0.92));
+
+    // PS1-style dither: every 2nd column at far distance gets dimmer
+    const dither=(col%2===1&&dist>4)?-10:0;
+    X.fillStyle=`rgb(${Math.max(0,r+dither)},${Math.max(0,g+dither)},${Math.max(0,b+dither)})`;
+    X.fillRect(col,drawStart,1,drawEnd-drawStart);
+  }
+}
+
+// ── Sprite rendering ──────────────────────────────────────────
+function drawSprites(){
+  // Gather all sprites (enemies + items)
+  const sprites=[];
+  enemies.forEach((e,i)=>{
+    if(e.state==='dead')return;
+    const sp=projectSprite(e.x,e.y);
+    if(sp)sprites.push({...sp,type:'enemy',idx:i,e});
+  });
+  items.forEach(it=>{
+    if(!it.alive)return;
+    const sp=projectSprite(it.x,it.y);
+    if(sp)sprites.push({...sp,type:it.type,it});
+  });
+  // Sort by distance (farthest first)
+  sprites.sort((a,b)=>b.dist-a.dist);
+
+  sprites.forEach(sp=>{
+    const {screenX,dist,h,type,e,it}=sp;
+    const w=Math.max(1,h);
+    const x0=Math.floor(screenX-w/2);
+
+    if(type==='enemy'){
+      const alert=e.state==='chase'||e.alertTimer>0;
+      const hit=e.hitFlash>0;
+      const y0=Math.floor((RH-h)/2);
+
+      for(let col=x0;col<x0+w;col++){
+        if(col<0||col>=RW)continue;
+        if(dist>zBuf[col])continue;
+        const u=(col-x0)/w;
+
+        // ── Gaunt creature anatomy in UV ──────────────────────
+        // HEAD — narrow, elongated, skull-like
+        const hL=x0+Math.floor(w*.32), hR=x0+Math.floor(w*.68);
+        const headTop=y0, headBot=y0+Math.floor(h*.22);
+        if(col>=hL&&col<hR){
+          // Skull colour — pale grey-green
+          const sk=hit?'#ee3333':alert?'#8a9a7a':'#7a8a6c';
+          X.fillStyle=sk; X.fillRect(col,headTop,1,headBot-headTop);
+          // Hollow black eye sockets (close range only)
+          if(dist<7){
+            const eyeY=y0+Math.floor(h*.08);
+            const eyeH=Math.max(1,Math.floor(h*.07));
+            if(u>0.35&&u<0.46){X.fillStyle='#080508';X.fillRect(col,eyeY,1,eyeH);}
+            if(u>0.54&&u<0.65){X.fillStyle='#080508';X.fillRect(col,eyeY,1,eyeH);}
+            // Red iris glow when chasing
+            if(alert&&dist<4){
+              if((u>0.37&&u<0.44)||(u>0.56&&u<0.63)){
+                X.fillStyle='#660000'; X.fillRect(col,eyeY+1,1,Math.max(1,eyeH-2));
+              }
+            }
+          }
+          // Jaw / mouth — dark gash
+          if(u>0.38&&u<0.62){
+            const mY=y0+Math.floor(h*.17);
+            X.fillStyle='#1a0808'; X.fillRect(col,mY,1,Math.max(1,Math.floor(h*.04)));
+          }
+        }
+
+        // NECK — very thin
+        const nL=x0+Math.floor(w*.44), nR=x0+Math.floor(w*.56);
+        const neckTop=headBot, neckBot=y0+Math.floor(h*.27);
+        if(col>=nL&&col<nR){
+          X.fillStyle=hit?'#cc2222':'#5a6a52';
+          X.fillRect(col,neckTop,1,neckBot-neckTop);
+        }
+
+        // SHOULDERS — wide angular shelf
+        const shL=x0+Math.floor(w*.12), shR=x0+Math.floor(w*.88);
+        const shTop=y0+Math.floor(h*.25), shBot=y0+Math.floor(h*.32);
+        if(col>=shL&&col<shR){
+          X.fillStyle=hit?'#bb2020':'#2a2a3a'; // dark torn gown
+          X.fillRect(col,shTop,1,shBot-shTop);
+          // Shoulder bone protrusion highlight
+          if((u>0.12&&u<0.22)||(u>0.78&&u<0.88)){
+            X.fillStyle='#4a5a44'; X.fillRect(col,shTop,1,Math.floor((shBot-shTop)*0.5));
+          }
+        }
+
+        // TORSO — torn hospital gown
+        const tL=x0+Math.floor(w*.28), tR=x0+Math.floor(w*.72);
+        const torsoTop=y0+Math.floor(h*.30), torsoBot=y0+Math.floor(h*.68);
+        if(col>=tL&&col<tR){
+          X.fillStyle=hit?'#cc1818':'#1e1e2c';
+          X.fillRect(col,torsoTop,1,torsoBot-torsoTop);
+          // Rib suggestion stripes
+          if(dist<5&&u>0.34&&u<0.66){
+            for(let ri=0;ri<3;ri++){
+              const ry=torsoTop+Math.floor((torsoBot-torsoTop)*(0.2+ri*0.22));
+              X.fillStyle='rgba(100,130,90,0.35)'; X.fillRect(col,ry,1,1);
+            }
+          }
+          // Blood stain on gown when hit
+          if(hit&&u>0.38&&u<0.58){
+            X.fillStyle='rgba(180,0,0,0.7)';
+            X.fillRect(col,torsoTop+Math.floor(h*.05),1,Math.floor(h*.12));
+          }
+        }
+
+        // ARMS — long, past hips, spindly
+        const armTop=y0+Math.floor(h*.28), armBot=y0+Math.floor(h*.84);
+        const laL=x0+Math.floor(w*.06), laR=x0+Math.floor(w*.20);
+        const raL=x0+Math.floor(w*.80), raR=x0+Math.floor(w*.94);
+        const armCol=hit?'#cc2222':alert?'#808a72':'#6a7862';
+        if((col>=laL&&col<laR)||(col>=raL&&col<raR)){
+          X.fillStyle=armCol; X.fillRect(col,armTop,1,armBot-armTop);
+        }
+        // Bony hands
+        const handTop=armBot, handBot=y0+Math.floor(h*.90);
+        if((col>=laL&&col<laR)||(col>=raL&&col<raR)){
+          X.fillStyle=hit?'#dd3333':'#5a6a50';
+          X.fillRect(col,handTop,1,handBot-handTop);
+        }
+
+        // LEGS
+        const legTop=y0+Math.floor(h*.66), legBot=y0+h;
+        const ll1=x0+Math.floor(w*.30), lr1=x0+Math.floor(w*.46);
+        const ll2=x0+Math.floor(w*.54), lr2=x0+Math.floor(w*.70);
+        const legCol=hit?'#cc2222':'#1a1a28';
+        if((col>=ll1&&col<lr1)||(col>=ll2&&col<lr2)){
+          X.fillStyle=legCol; X.fillRect(col,legTop,1,legBot-legTop);
+        }
+
+        zBuf[col]=dist;
+      }
+
+      // Alert "!" indicator
+      if(alert&&dist<7){
+        X.fillStyle='rgba(255,40,40,.9)';
+        X.font='bold 7px monospace'; X.textAlign='center';
+        X.fillText('!',screenX,Math.floor((RH-h)/2)-3);
+      }
+
+      // HP pips close range
+      if(dist<3&&e.health>0){
+        for(let p=0;p<e.health;p++){
+          X.fillStyle='#ff4444';
+          X.fillRect(screenX-8+p*5, Math.floor((RH-h)/2)-8, 4, 3);
+        }
+      }
+    } else {
+      // Item sprite — glowing coloured box
+      const col2=type==='key'?'#ffdd44':type==='health'?'#44ff88':'#4488ff';
+      const pu=(Math.sin(gameTime*3)+1)/2;
+      const y0=Math.floor((RH-h*.5)/2);
+      const ih=Math.floor(h*.5);
+      for(let col=x0+Math.floor(w*.3);col<x0+Math.floor(w*.7);col++){
+        if(col<0||col>=RW)continue;
+        if(dist>zBuf[col])continue;
+        X.fillStyle=col2;
+        X.fillRect(col,y0,1,ih);
+      }
+      // Glow
+      if(dist<3){
+        X.globalAlpha=0.3+pu*.2;
+        X.fillStyle=col2;
+        X.fillRect(x0+Math.floor(w*.2),y0-1,Math.floor(w*.6),ih+2);
+        X.globalAlpha=1;
+      }
+    }
+  });  // end sprites.forEach
+
+  // ── World-space blood decals (floor puddles) ──────────────────
+  bloodDecals.forEach(b=>{
+    const sp=projectSprite(b.wx,b.wy);
+    if(!sp)return;
+    const {screenX,dist}=sp;
+    if(dist>zBuf[screenX])return;
+    // Flat ellipse at floor level
+    const floorY=Math.floor(RH/2 + Math.min(RH/2-2, RH/(dist*2.2)));
+    const pw=Math.max(1,Math.floor(RH/(dist*1.8)));
+    const ph=Math.max(1,Math.floor(pw*0.3));
+    X.globalAlpha=b.a*0.85;
+    X.fillStyle='#660000';
+    X.beginPath();
+    X.ellipse(screenX,floorY,pw,ph,0,0,Math.PI*2);
+    X.fill();
+    X.fillStyle='#440000';
+    X.beginPath();
+    X.ellipse(screenX,floorY,Math.max(1,pw-2),Math.max(1,ph-1),0,0,Math.PI*2);
+    X.fill();
+    X.globalAlpha=1;
+  });
+}
+function drawFlashlight(){
+  const cx=RW/2, cy=RH/2;
+  if(flashlight.on && !flashlight.flicker){
+    // Cone of light — bright oval in centre, hard darkness at edges
+    const vg=X.createRadialGradient(cx,cy-10,4, cx,cy,RH*.6);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(0.45,'rgba(0,0,0,0)');
+    vg.addColorStop(0.72,'rgba(0,0,0,0.55)');
+    vg.addColorStop(1,'rgba(0,0,0,0.96)');
+    X.fillStyle=vg; X.fillRect(0,0,RW,RH);
+    // Subtle warm tint from flashlight centre
+    const wg=X.createRadialGradient(cx,cy,0,cx,cy,RH*.3);
+    wg.addColorStop(0,'rgba(255,240,200,0.04)');
+    wg.addColorStop(1,'rgba(0,0,0,0)');
+    X.fillStyle=wg; X.fillRect(0,0,RW,RH);
+  } else {
+    // Flashlight off — near total darkness, only faint emergency green
+    X.fillStyle='rgba(0,0,0,0.88)'; X.fillRect(0,0,RW,RH);
+    // Tiny green ember glow at centre
+    const eg=X.createRadialGradient(cx,cy,0,cx,cy,30);
+    eg.addColorStop(0,'rgba(0,60,20,0.18)');
+    eg.addColorStop(1,'rgba(0,0,0,0)');
+    X.fillStyle=eg; X.fillRect(0,0,RW,RH);
+  }
+}
+
+// ── Blood splats ──────────────────────────────────────────────
+function drawBloodSplats(){
+  bloodSplats.forEach(b=>{
+    X.globalAlpha=b.a*0.85;
+    X.fillStyle='#8b0000';
+    X.beginPath();X.arc(b.x,b.y,b.r,0,Math.PI*2);X.fill();
+    // Lighter centre
+    X.fillStyle='#cc1111';
+    X.beginPath();X.arc(b.x,b.y,b.r*0.4,0,Math.PI*2);X.fill();
+  });
+  X.globalAlpha=1;
+}
+
+// ── Cold hospital color grade ─────────────────────────────────
+function drawColorGrade(){
+  // Desaturating blue-green tint over everything — RE1 / Silent Hill feel
+  X.fillStyle='rgba(0,15,25,0.18)'; X.fillRect(0,0,RW,RH);
+  // Subtle green scanline shimmer on ceiling half
+  X.fillStyle='rgba(0,20,8,0.10)'; X.fillRect(0,0,RW,RH/2);
+}
+
+// ── HUD ───────────────────────────────────────────────────────
+function drawHUD(){
+  // Health bar
+  const hpPct=player.health/player.maxHealth;
+  const hpCol=hpPct>0.5?'#22cc44':hpPct>0.25?'#ccaa00':'#cc2222';
+  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(3,RH-14,62,10);
+  X.fillStyle=hpCol;X.fillRect(4,RH-13,Math.floor(60*hpPct),8);
+  X.strokeStyle='rgba(255,255,255,.3)';X.lineWidth=1;X.strokeRect(3,RH-14,62,10);
+  X.font='bold 5px monospace';X.fillStyle='#fff';X.textAlign='left';
+  X.fillText(`HP ${player.health}`,4,RH-17);
+
+  // Flashlight battery
+  const batPct=flashlight.battery/100;
+  const batCol=batPct>0.4?'#4488ff':batPct>0.2?'#8844ff':'#ff4444';
+  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(3,RH-28,62,8);
+  X.fillStyle=batCol;X.fillRect(4,RH-27,Math.floor(60*batPct),6);
+  X.strokeStyle='rgba(255,255,255,.3)';X.lineWidth=1;X.strokeRect(3,RH-28,62,8);
+  X.font='bold 5px monospace';X.fillStyle='#aaaaff';X.textAlign='left';
+  X.fillText(`LIGHT`,4,RH-31);
+
+  // Key indicator
+  if(player.hasKey){
+    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW-28,RH-22,24,18);
+    X.fillStyle='#ffdd44';X.font='bold 7px monospace';X.textAlign='center';
+    X.fillText('KEY',RW-16,RH-10);
+  }
+
+  // ── Level + score top-right ──
+  X.font='bold 6px monospace';X.textAlign='right';
+  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(RW-82,2,80,24);
+  X.fillStyle='#ffdd44';X.fillText(`SCORE ${score}`,RW-4,11);
+  X.fillStyle='#ff8844';X.fillText(`LV${currentLevel+1} ${LEVELS[currentLevel].name.slice(0,9)}`,RW-4,21);
+
+  // ── Crosshair — turns red when enemy in range ──
+  const cx=RW/2,cy=RH/2;
+  const enemyClose=enemies.some(e=>e.state!=='dead'&&Math.hypot(e.x-player.x,e.y-player.y)<2.2);
+  X.strokeStyle=enemyClose?'rgba(255,60,60,.9)':'rgba(255,255,255,.7)';
+  X.lineWidth=1;
+  X.beginPath();X.moveTo(cx-5,cy);X.lineTo(cx-2,cy);X.stroke();
+  X.beginPath();X.moveTo(cx+2,cy);X.lineTo(cx+5,cy);X.stroke();
+  X.beginPath();X.moveTo(cx,cy-5);X.lineTo(cx,cy-2);X.stroke();
+  X.beginPath();X.moveTo(cx,cy+2);X.lineTo(cx,cy+5);X.stroke();
+  if(enemyClose){
+    X.strokeStyle='rgba(255,60,60,.4)';
+    X.beginPath();X.arc(cx,cy,4,0,Math.PI*2);X.stroke();
+  }
+
+  // ── GoldenEye-style first-person gun ─────────────────────────
+  const bobY = Math.sin(weaponBobT) * 5 * weaponBobAmt;
+  const bobX = Math.sin(weaponBobT * 0.5) * 3 * weaponBobAmt;
+  // Prominent position — large, bottom-right, partially off screen
+  const gx = RW - 88 + bobX + weaponSway * 4;
+  const gy = RH - 52 + bobY - weaponKick * 1.5;
+
+  X.save();
+  X.translate(gx, gy);
+  X.scale(1.55, 1.55);  // GoldenEye scale — dominates bottom-right
+
+  // ── GoldenEye silver silenced pistol ─────────────────────────
+  // Gun shadow
+  X.fillStyle = 'rgba(0,0,0,.4)';
+  X.fillRect(2, 5, 80, 35);
+
+  // ── SILENCER — long cylinder extending forward ──
+  // Outer silencer body — dark gunmetal cylinder
+  X.fillStyle = '#484848';
+  X.fillRect(46, 4, 36, 11);
+  // Silencer top highlight (chrome glint)
+  X.fillStyle = '#888';
+  X.fillRect(46, 4, 36, 3);
+  // Silencer mid band — subtle light stripe
+  X.fillStyle = '#666';
+  X.fillRect(46, 7, 36, 2);
+  // Silencer shadow underside
+  X.fillStyle = '#222';
+  X.fillRect(46, 13, 36, 2);
+  // Silencer end cap
+  X.fillStyle = '#333';
+  X.fillRect(80, 3, 4, 13);
+  X.fillStyle = '#555';
+  X.fillRect(80, 3, 4, 3);
+  // Silencer wrap rings (detail)
+  X.fillStyle = '#383838';
+  for(let r=0;r<4;r++){X.fillRect(51+r*8,4,1,11);}
+
+  // ── PISTOL BODY — silver chrome ──
+  // Main slide — silver with PS1 flat-shade faces
+  X.fillStyle = '#a0a8b0';  // silver
+  X.beginPath();
+  X.moveTo(16, 8);
+  X.lineTo(50, 8);
+  X.lineTo(50, 20);
+  X.lineTo(16, 20);
+  X.closePath();
+  X.fill();
+  // Slide top highlight — brighter chrome
+  X.fillStyle = '#c8d0d8';
+  X.fillRect(16, 8, 34, 4);
+  // Slide bottom shadow
+  X.fillStyle = '#788090';
+  X.fillRect(16, 17, 34, 3);
+  // Serrations on rear of slide (grip texture)
+  X.fillStyle = '#6a7280';
+  for(let s=0;s<5;s++){X.fillRect(17+s*2,9,1,9);}
+  // Ejection port cut-out
+  X.fillStyle = '#2a2a2a';
+  X.fillRect(32, 9, 10, 6);
+  // Ejection port inner glint
+  X.fillStyle = '#444';
+  X.fillRect(32, 9, 10, 2);
+
+  // Frame / dust cover (below slide) — slightly darker silver
+  X.fillStyle = '#8a9298';
+  X.fillRect(20, 20, 30, 8);
+  X.fillStyle = '#9aA2a8';
+  X.fillRect(20, 20, 30, 3);
+  // Rail detail on dust cover
+  X.fillStyle = '#707880';
+  X.fillRect(22, 23, 26, 2);
+
+  // ── GRIP — dark polymer, slightly angled ──
+  X.fillStyle = '#222228';
+  X.beginPath();
+  X.moveTo(18, 20);
+  X.lineTo(24, 20);
+  X.lineTo(22, 42);
+  X.lineTo(12, 42);
+  X.closePath();
+  X.fill();
+  // Grip highlight face
+  X.fillStyle = '#333338';
+  X.beginPath();
+  X.moveTo(18, 20);
+  X.lineTo(24, 20);
+  X.lineTo(23, 26);
+  X.lineTo(17, 26);
+  X.closePath();
+  X.fill();
+  // Grip stippling
+  X.fillStyle = '#1a1a20';
+  for(let gy2=28;gy2<40;gy2+=3){
+    for(let gx2=13;gx2<22;gx2+=2){X.fillRect(gx2,gy2,1,1);}
+  }
+  // Mag base
+  X.fillStyle = '#181818';
+  X.fillRect(11, 40, 12, 3);
+
+  // Trigger guard — silver wire loop
+  X.strokeStyle = '#8090a0'; X.lineWidth = 1.5;
+  X.beginPath();
+  X.moveTo(26, 20);
+  X.quadraticCurveTo(24, 30, 32, 30);
+  X.stroke();
+  // Trigger
+  X.fillStyle = '#909898';
+  X.fillRect(28, 22, 2, 6);
+
+  // ── ARM / HAND rising from bottom ──
+  X.fillStyle = '#141210';  // dark jacket
+  X.beginPath();
+  X.moveTo(8, 38);
+  X.lineTo(22, 26);
+  X.lineTo(36, 28);
+  X.lineTo(46, 36);
+  X.lineTo(46, 60);
+  X.lineTo(8, 60);
+  X.closePath();
+  X.fill();
+  // Sleeve highlight
+  X.fillStyle = '#1e1c18';
+  X.beginPath();
+  X.moveTo(8, 38);
+  X.lineTo(22, 26);
+  X.lineTo(36, 28);
+  X.lineTo(46, 36);
+  X.closePath();
+  X.fill();
+  // Hand — wrapping grip
+  X.fillStyle = '#5a3c28';
+  X.beginPath();
+  X.moveTo(14, 32);
+  X.lineTo(22, 24);
+  X.lineTo(34, 26);
+  X.lineTo(38, 34);
+  X.lineTo(14, 36);
+  X.closePath();
+  X.fill();
+  // Knuckle highlight
+  X.fillStyle = '#6a4c38';
+  X.fillRect(16, 26, 16, 4);
+  // Thumb detail
+  X.fillStyle = '#5a3c28';
+  X.fillRect(38, 28, 6, 8);
+
+  // ── Muzzle flash — at silencer tip ──
+  if(attackFlash > 4){
+    const fa = (attackFlash - 4) / 4;
+    X.globalAlpha = fa;
+    // Suppressed flash — smaller, mostly white with slight yellow
+    X.fillStyle = '#ffffff';
+    X.beginPath(); X.arc(83, 9, 4*fa, 0, Math.PI*2); X.fill();
+    X.fillStyle = '#ffffaa';
+    X.beginPath(); X.arc(83, 9, 6*fa, 0, Math.PI*2); X.fill();
+    // Tight spikes (silencer suppresses most flash)
+    X.strokeStyle = '#ffffcc'; X.lineWidth = 1;
+    for(let i=0;i<4;i++){
+      const ang=i/4*Math.PI*2;
+      X.globalAlpha=fa*0.5;
+      X.beginPath();
+      X.moveTo(83,9);
+      X.lineTo(83+Math.cos(ang)*7*fa, 9+Math.sin(ang)*5*fa);
+      X.stroke();
+    }
+    // Very subtle screen flash (silenced)
+    X.globalAlpha=fa*0.08;
+    X.fillStyle='#ffffaa';
+    X.fillRect(-gx,-gy,RW,RH);
+    X.globalAlpha=1;
+  }
+
+  X.restore();
+
+  // Damage flash
+  if(damageFlash>0){
+    X.globalAlpha=damageFlash/14*.45;
+    X.fillStyle='#cc0000';X.fillRect(0,0,RW,RH);
+    X.globalAlpha=1;
+  }
+
+  // Minimap (tiny, corner)
+  drawMinimap();
+}
+
+function drawMinimap(){
+  const ms=3, ox=RW-MAPW*ms-3, oy=3;
+  X.fillStyle='rgba(0,0,0,.7)';X.fillRect(ox-1,oy-1,MAPW*ms+2,MAPH*ms+2);
+  for(let my=0;my<MAPH;my++){
+    for(let mx=0;mx<MAPW;mx++){
+      const v=MAP[my][mx];
+      if(v===0)continue;
+      X.fillStyle=v===1?'#333':v===2?'#622':v===3?'#262':'#444';
+      X.fillRect(ox+mx*ms,oy+my*ms,ms,ms);
+    }
+  }
+  // Items
+  items.forEach(it=>{
+    if(!it.alive)return;
+    X.fillStyle=it.type==='key'?'#ffdd44':'#44ff88';
+    X.fillRect(ox+Math.floor(it.x)*ms,oy+Math.floor(it.y)*ms,ms,ms);
+  });
+  // Enemies
+  enemies.forEach(e=>{
+    if(e.state==='dead')return;
+    X.fillStyle=e.state==='chase'?'#ff4444':'#884444';
+    X.fillRect(ox+Math.floor(e.x)*ms+1,oy+Math.floor(e.y)*ms+1,ms-1,ms-1);
+  });
+  // Player
+  X.fillStyle='#44aaff';
+  X.fillRect(ox+Math.floor(player.x)*ms,oy+Math.floor(player.y)*ms,ms,ms);
+  // Direction
+  X.strokeStyle='#44aaff';X.lineWidth=1;
+  X.beginPath();
+  X.moveTo(ox+player.x*ms,oy+player.y*ms);
+  X.lineTo(ox+player.x*ms+Math.cos(player.angle)*5,oy+player.y*ms+Math.sin(player.angle)*5);
+  X.stroke();
+}
+
+function drawMessages(){
+  if(msgTimer>0&&msgText){
+    const a=Math.min(1,msgTimer);
+    X.globalAlpha=a;
+    X.font='bold 8px monospace';X.textAlign='center';
+    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-40,4,80,12);
+    X.fillStyle='#ffffaa';X.fillText(msgText,RW/2,13);
+    X.globalAlpha=1;
+  }
+
+  // Item proximity glow hint — no button needed, just walk over
+  items.forEach(it=>{
+    if(!it.alive)return;
+    if(Math.hypot(it.x-player.x,it.y-player.y)<1.5){
+      const pulse=(Math.sin(gameTime*6)+1)/2;
+      X.globalAlpha=0.5+pulse*0.45;
+      X.font='bold 6px monospace';X.textAlign='center';
+      X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-32,RH/2+10,64,10);
+      X.fillStyle='#ffdd88';
+      X.fillText(it.type==='key'?'▶ KEY — WALK OVER':'▶ MEDS — WALK OVER',RW/2,RH/2+18);
+      X.globalAlpha=1;
+    }
+  });
+
+  // Find exit hint
+  if(mapAt(Math.floor(player.x+Math.cos(player.angle)), Math.floor(player.y+Math.sin(player.angle)))===3||
+     mapAt(player.x,player.y)===3){
+    X.font='bold 6px monospace';X.textAlign='center';
+    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-26,RH/2+10,52,10);
+    X.fillStyle='#44ff88';X.fillText('EXIT!',RW/2,RH/2+18);
+  }
+}
+
+// ── VHS / PS1 noise overlay ───────────────────────────────────
+function drawVHS(){
+  // Scanlines
+  for(let y=0;y<RH;y+=2){
+    X.fillStyle='rgba(0,0,0,.08)';X.fillRect(0,y,RW,1);
+  }
+  // Chromatic aberration strip (rare)
+  if(Math.random()<0.04){
+    const sy=Math.floor(Math.random()*RH);
+    X.globalAlpha=0.15;
+    X.fillStyle='rgba(255,0,0,.5)';X.fillRect(0,sy,RW,1);
+    X.fillStyle='rgba(0,0,255,.5)';X.fillRect(2,sy,RW,1);
+    X.globalAlpha=1;
+  }
+  // Occasional full noise line
+  if(Math.random()<0.02){
+    const sy=Math.floor(Math.random()*RH);
+    X.fillStyle=`rgba(255,255,255,${Math.random()*.08})`;
+    X.fillRect(0,sy,RW,1);
+  }
+}
+
+// ── Screens ───────────────────────────────────────────────────
+function drawTitle(){
+  X.fillStyle='#000';X.fillRect(0,0,RW,RH);
+  if(Math.random()<0.05){X.fillStyle='rgba(255,255,255,.02)';X.fillRect(0,0,RW,RH);}
+
+  // Game title — two lines, blood drip effect
+  X.font='bold 10px monospace';X.textAlign='center';
+  X.fillStyle='#660000';X.fillText('HILYARD STREET',RW/2+1,30);
+  X.fillStyle='#aa1111';X.fillText('HILYARD STREET',RW/2,29);
+  X.font='bold 14px monospace';
+  X.fillStyle='#880000';X.fillText('HOSPITAL',RW/2+1,46);
+  X.fillStyle='#cc2222';X.fillText('HOSPITAL',RW/2,44);
+
+  // Blood drips from title
+  for(let d=0;d<5;d++){
+    const dx=RW/2-22+d*11, len=5+d*4+(d%2)*3;
+    X.fillStyle='#aa0000';X.fillRect(dx,45,2,len);
+    X.fillStyle='#880000';X.beginPath();X.arc(dx+1,45+len,2,0,Math.PI*2);X.fill();
+  }
+
+  // Byline
+  X.font='bold 5px monospace';X.fillStyle='#664444';
+  X.fillText('by Ty Alami',RW/2,58);
+
+  X.font='bold 5px monospace';X.fillStyle='#7a3333';
+  X.fillText('A SURVIVAL HORROR EXPERIENCE',RW/2,70);
+
+  X.font='5px monospace';
+  const tips=[
+    'The hospital has been dark for three days.',
+    'You went in to look for your sister.',
+    'Something found you first.',
+    '',
+    'W A S D  —  Move  |  MOUSE / SPACE  —  Shoot',
+    'P  —  Pause  |  Walk over items to pick up',
+  ];
+  tips.forEach((t,i)=>{X.fillStyle=i<3?'#775544':'#554444';X.fillText(t,RW/2,84+i*11);});
+
+  const pu=(Math.sin(Date.now()/500)+1)/2;
+  X.globalAlpha=.4+pu*.55;
+  X.fillStyle='#aa6644';X.font='bold 6px monospace';
+  X.fillText('CLICK OR PRESS ENTER TO BEGIN',RW/2,172);
+  X.globalAlpha=1;
+  drawVHS();
+}
+
+function drawDead(){
+  X.fillStyle='#0a0000';X.fillRect(0,0,RW,RH);
+  for(let i=0;i<8;i++){
+    X.fillStyle=`rgba(${80+i*10},0,0,.${i+1})`;
+    X.fillRect(i,i,RW-i*2,RH-i*2);
+  }
+  X.font='bold 16px monospace';X.textAlign='center';
+  X.fillStyle='#440000';X.fillText('YOU DIED',RW/2+1,RH/2-8);
+  X.fillStyle='#cc1111';X.fillText('YOU DIED',RW/2,RH/2-10);
+  const pu=(Math.sin(Date.now()/600)+1)/2;
+  X.globalAlpha=.35+pu*.6;
+  X.fillStyle='#883333';X.font='bold 5px monospace';
+  X.fillText('CLICK TO TRY AGAIN',RW/2,RH/2+20);
+  X.globalAlpha=1;
+  drawVHS();
+}
+
+function drawWin(){
+  X.fillStyle='#000a04';X.fillRect(0,0,RW,RH);
+  X.font='bold 12px monospace';X.textAlign='center';
+  X.fillStyle='#004422';X.fillText('YOU ESCAPED',RW/2+1,RH/2-8);
+  X.fillStyle='#22cc66';X.fillText('YOU ESCAPED',RW/2,RH/2-10);
+  X.font='5px monospace';X.fillStyle='#336644';
+  X.fillText('You made it out of Hilyard Street.',RW/2,RH/2+8);
+  X.fillText('You never found your sister.',RW/2,RH/2+18);
+  X.fillStyle='#ffdd44';X.fillText(`Score: ${score}  Kills: ${kills}/4`,RW/2,RH/2+22);
+  const pu=(Math.sin(Date.now()/600)+1)/2;
+  X.globalAlpha=.35+pu*.6;
+  X.fillStyle='#448855';X.font='bold 5px monospace';
+  X.fillText('CLICK TO PLAY AGAIN',RW/2,RH/2+24);
+  X.globalAlpha=1;
+  drawVHS();
+}
+
+// ── On-screen mobile controls ─────────────────────────────────
+function drawMobileControls(){
+  // Left zone — joystick ring
+  const jx=38, jy=RH-36;
+  X.strokeStyle='rgba(255,255,255,.18)';X.lineWidth=1;
+  X.beginPath();X.arc(jx,jy,22,0,Math.PI*2);X.stroke();
+  if(joystick.active){
+    const dx=Math.max(-18,Math.min(18,joystick.cx-joystick.sx));
+    const dy=Math.max(-18,Math.min(18,joystick.cy-joystick.sy));
+    X.fillStyle='rgba(255,255,255,.28)';
+    X.beginPath();X.arc(jx+dx,jy+dy,10,0,Math.PI*2);X.fill();
+  } else {
+    X.fillStyle='rgba(255,255,255,.1)';
+    X.beginPath();X.arc(jx,jy,10,0,Math.PI*2);X.fill();
+  }
+  X.fillStyle='rgba(255,255,255,.22)';X.font='6px monospace';X.textAlign='center';
+  X.fillText('▲',jx,jy-14);X.fillText('▼',jx,jy+20);
+  X.fillText('◀',jx-16,jy+3);X.fillText('▶',jx+16,jy+3);
+
+  // Right zone — attack button
+  const ax=RW-28, ay=RH-26;
+  X.fillStyle=atkBtn.active?'rgba(180,40,40,.6)':'rgba(140,20,20,.35)';
+  X.beginPath();X.arc(ax,ay,18,0,Math.PI*2);X.fill();
+  X.strokeStyle='rgba(255,80,80,.45)';X.lineWidth=1.5;
+  X.beginPath();X.arc(ax,ay,18,0,Math.PI*2);X.stroke();
+  X.font='bold 6px monospace';X.textAlign='center';X.fillStyle='rgba(255,180,180,.85)';
+  X.fillText('HIT',ax,ay+2);
+
+  // Subtle zone divider
+  X.strokeStyle='rgba(255,255,255,.05)';X.lineWidth=1;X.setLineDash([3,4]);
+  X.beginPath();X.moveTo(RW/2,RH-55);X.lineTo(RW/2,RH);X.stroke();
+  X.setLineDash([]);
+}
+
+// ── Intro narrative overlay ───────────────────────────────────
+function drawIntro(){
+  X.fillStyle='rgba(0,0,0,.82)';X.fillRect(0,0,RW,RH);
+  const lv=LEVELS[currentLevel];
+  const lines=[
+    {t:'You open your eyes.',          c:'#ccbbaa',s:'6px monospace',      y:26},
+    {t:`LEVEL ${currentLevel+1}`,       c:'#ffdd44',s:'bold 12px monospace',y:44},
+    {t:lv.name,                         c:'#cc8844',s:'bold 8px monospace', y:58},
+    {t:'────────────',                  c:'#332211',s:'6px monospace',      y:70},
+    {t:`${lv.enemyDefs.length} creatures patrol these halls.`,
+                                        c:'#cc6644',s:'bold 6px monospace', y:84},
+    {t:'Find the KEY. Unlock the door.',c:'#ccaa66',s:'6px monospace',      y:98},
+    {t:'Reach the EXIT.',               c:'#ccaa66',s:'6px monospace',      y:110},
+    {t:'────────────',                  c:'#332211',s:'6px monospace',      y:122},
+    {t:'DRAG LEFT  →  Move & Turn',     c:'#7799bb',s:'6px monospace',      y:147},
+    {t:'TAP RIGHT  →  Shoot',           c:'#7799bb',s:'6px monospace',      y:159},
+    {t:'Walk over items to pick up',    c:'#7799bb',s:'6px monospace',      y:171},
+  ];
+  lines.forEach(l=>{X.font=l.s;X.textAlign='center';X.fillStyle=l.c;X.fillText(l.t,RW/2,l.y);});
+  const pu=(Math.sin(Date.now()/500)+1)/2;
+  X.globalAlpha=.4+pu*.55;
+  X.font='bold 6px monospace';X.fillStyle='#997755';X.textAlign='center';
+  X.fillText('▶  TAP or SPACE to begin  ◀',RW/2,182);
+  X.globalAlpha=1;
+}
+
+function drawPause(){
+  X.fillStyle='rgba(0,0,0,.7)';X.fillRect(0,0,RW,RH);
+  X.font='bold 10px monospace';X.textAlign='center';
+  X.fillStyle='#aa8866';X.fillText('PAUSED',RW/2,RH/2-4);
+  X.font='5px monospace';X.fillStyle='#665544';
+  X.fillText('P to resume',RW/2,RH/2+10);
+}
+
+requestAnimationFrame(ts=>{lt=ts;requestAnimationFrame(loop);});
+</script>
+</body>
+</html>
