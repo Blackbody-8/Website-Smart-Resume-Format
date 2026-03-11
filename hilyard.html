@@ -86,12 +86,16 @@ const LEVELS=[
     playerStart:{x:1.5,y:1.5,angle:0},
     lights:[{x:6,y:2},{x:16,y:2},{x:21,y:7},{x:16,y:7},{x:21,y:13},{x:6,y:15}],
     enemyDefs:[
-      {x:8.5,y:2.5,health:2,state:'patrol',patrolAngle:0},
-      {x:21.5,y:7.5,health:2,state:'patrol',patrolAngle:Math.PI},
+      {x:8.5, y:1.5, health:2,state:'patrol',patrolAngle:0},         // row 1 corridor, near start
+      {x:18.5,y:1.5, health:2,state:'patrol',patrolAngle:Math.PI},   // row 1 corridor, far end
+      {x:6.5,  y:3.5, health:2,state:'patrol',patrolAngle:Math.PI},  // row 3 corridor
+      {x:16.5, y:3.5, health:2,state:'idle',  patrolAngle:0},        // row 3 corridor, far end
+      {x:19.5, y:7.5, health:2,state:'patrol',patrolAngle:Math.PI*1.5}, // side arm with key
     ],
     itemDefs:[
-      {type:'key',x:14.5,y:7.5},
+      {type:'key',   x:14.5,y:7.5},
       {type:'health',x:21.5,y:5.5},
+      {type:'health',x:6.5, y:3.5},
     ],
   },
   { // ─ LEVEL 1: SURGERY WING ─ wide centre room ─
@@ -119,14 +123,17 @@ const LEVELS=[
     playerStart:{x:1.5,y:1.5,angle:0},
     lights:[{x:8,y:2},{x:18,y:2},{x:21,y:6},{x:15,y:9},{x:4,y:12},{x:2,y:14}],
     enemyDefs:[
-      {x:10.5,y:2.5,health:2,state:'patrol',patrolAngle:0},
-      {x:21.5,y:6.5,health:2,state:'patrol',patrolAngle:Math.PI},
-      {x:14.5,y:9.5,health:3,state:'idle',patrolAngle:Math.PI/2},
+      {x:10.5,y:2.5, health:2,state:'patrol',patrolAngle:0},
+      {x:21.5,y:6.5, health:2,state:'patrol',patrolAngle:Math.PI},
+      {x:14.5,y:9.5, health:3,state:'idle',  patrolAngle:Math.PI/2},
+      {x:4.5, y:3.5, health:2,state:'patrol',patrolAngle:Math.PI*1.5},
+      {x:18.5,y:3.5, health:2,state:'patrol',patrolAngle:Math.PI},
+      {x:3.5, y:12.5,health:3,state:'idle',  patrolAngle:0},
     ],
     itemDefs:[
-      {type:'key',x:12.5,y:9.5},
+      {type:'key',   x:12.5,y:9.5},
       {type:'health',x:21.5,y:5.5},
-      {type:'health',x:4.5,y:12.5},
+      {type:'health',x:4.5, y:12.5},
     ],
   },
   { // ─ LEVEL 2: THE BASEMENT ─ two descents, tight chokepoints ─
@@ -154,15 +161,19 @@ const LEVELS=[
     playerStart:{x:1.5,y:1.5,angle:0},
     lights:[{x:10,y:2},{x:3,y:6},{x:10,y:6},{x:21,y:7},{x:21,y:12},{x:8,y:15}],
     enemyDefs:[
-      {x:6.5,y:2.5,health:2,state:'patrol',patrolAngle:0},
-      {x:3.5,y:6.5,health:3,state:'idle',patrolAngle:Math.PI},
-      {x:10.5,y:6.5,health:3,state:'patrol',patrolAngle:Math.PI/2},
+      {x:6.5, y:2.5, health:2,state:'patrol',patrolAngle:0},
+      {x:3.5, y:6.5, health:3,state:'idle',  patrolAngle:Math.PI},
+      {x:10.5,y:6.5, health:3,state:'patrol',patrolAngle:Math.PI/2},
       {x:21.5,y:11.5,health:3,state:'patrol',patrolAngle:Math.PI*1.5},
+      {x:14.5,y:2.5, health:2,state:'patrol',patrolAngle:Math.PI},
+      {x:20.5,y:5.5, health:3,state:'idle',  patrolAngle:Math.PI*0.5},
+      {x:3.5, y:15.5,health:3,state:'patrol',patrolAngle:0},
     ],
     itemDefs:[
-      {type:'key',x:6.5,y:6.5},
+      {type:'key',   x:6.5, y:6.5},
       {type:'health',x:10.5,y:7.5},
       {type:'health',x:21.5,y:5.5},
+      {type:'health',x:10.5,y:2.5},
     ],
   },
 ];
@@ -391,7 +402,175 @@ function loadLevel(n){
   bloodDecals=[];
 }
 
+// ── Audio engine ─────────────────────────────────────────────
+let audioCtx=null, masterGain=null;
+let droneNode=null, droneGain=null;
+let dripTimer=0, groanTimer=0;
+
+function initAudio(){
+  if(audioCtx)return;
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  masterGain=audioCtx.createGain();
+  masterGain.gain.value=0.7;
+  masterGain.connect(audioCtx.destination);
+  startDrone();
+}
+
+// Deep rumbling ambient drone — layered detuned oscillators through heavy lowpass
+function startDrone(){
+  if(!audioCtx||droneNode)return;
+  const gain=audioCtx.createGain();
+  gain.gain.setValueAtTime(0,audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.08,audioCtx.currentTime+3);
+  gain.connect(masterGain);
+  droneGain=gain;
+
+  // Two detuned subs for that low rumble
+  [38,41].forEach((freq,i)=>{
+    const osc=audioCtx.createOscillator();
+    const lp=audioCtx.createBiquadFilter();
+    lp.type='lowpass'; lp.frequency.value=90; lp.Q.value=0.5;
+    osc.type='sawtooth';
+    osc.frequency.value=freq;
+    // Slow LFO wobble
+    const lfo=audioCtx.createOscillator();
+    const lfoGain=audioCtx.createGain();
+    lfo.frequency.value=0.07+i*0.03;
+    lfoGain.gain.value=1.2;
+    lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+    lfo.start();
+    osc.connect(lp); lp.connect(gain);
+    osc.start();
+  });
+
+  // High faint hiss — distant ventilation
+  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.15;
+  const src=audioCtx.createBufferSource();
+  src.buffer=buf; src.loop=true;
+  const hp=audioCtx.createBiquadFilter();
+  hp.type='bandpass'; hp.frequency.value=1800; hp.Q.value=0.4;
+  const hg=audioCtx.createGain(); hg.gain.value=0.06;
+  src.connect(hp); hp.connect(hg); hg.connect(masterGain);
+  src.start();
+}
+
+// Single water drip — synthesised from pitched noise burst + reverb tail
+function playDrip(){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*0.18,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  // Short noise burst that decays
+  for(let i=0;i<d.length;i++){
+    const env=Math.exp(-i/(audioCtx.sampleRate*0.03));
+    d[i]=(Math.random()*2-1)*env;
+  }
+  const src=audioCtx.createBufferSource();
+  src.buffer=buf;
+  const bp=audioCtx.createBiquadFilter();
+  bp.type='bandpass';
+  // Randomise pitch for variety — 400–900 Hz
+  bp.frequency.value=400+Math.random()*500;
+  bp.Q.value=18;
+  const g=audioCtx.createGain(); g.gain.value=0.55;
+  src.connect(bp); bp.connect(g); g.connect(masterGain);
+  src.start(t);
+
+  // Short reverb tail — echo drip off concrete wall
+  const tail=audioCtx.createBuffer(1,audioCtx.sampleRate*0.4,audioCtx.sampleRate);
+  const td=tail.getChannelData(0);
+  for(let i=0;i<td.length;i++) td[i]=(Math.random()*2-1)*Math.exp(-i/(audioCtx.sampleRate*0.08))*0.25;
+  const ts=audioCtx.createBufferSource(); ts.buffer=tail;
+  const tg=audioCtx.createGain(); tg.gain.value=0.3;
+  const delay=audioCtx.createDelay(); delay.delayTime.value=0.06+Math.random()*0.12;
+  ts.connect(delay); delay.connect(tg); tg.connect(masterGain);
+  ts.start(t+0.05);
+}
+
+// Gunshot — sharp crack through distortion
+function playGunshot(){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*0.25,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){
+    const env=i<200?i/200:Math.exp(-(i-200)/(audioCtx.sampleRate*0.06));
+    d[i]=(Math.random()*2-1)*env;
+  }
+  const src=audioCtx.createBufferSource(); src.buffer=buf;
+  const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2200;
+  const g=audioCtx.createGain(); g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.22);
+  // Silencer effect — softer high end, punch the mids
+  const mid=audioCtx.createBiquadFilter(); mid.type='peaking'; mid.frequency.value=800; mid.gain.value=8;
+  src.connect(lp); lp.connect(mid); mid.connect(g); g.connect(masterGain);
+  src.start(t);
+}
+
+// Enemy growl — pitched noise burst when chasing
+function playGrowl(){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*0.35,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  const pitch=80+Math.random()*40;
+  for(let i=0;i<d.length;i++){
+    const env=Math.exp(-i/(audioCtx.sampleRate*0.12));
+    d[i]=Math.sin(i/audioCtx.sampleRate*pitch*Math.PI*2)*0.5*(Math.random()*0.5+0.5)*env;
+  }
+  const src=audioCtx.createBufferSource(); src.buffer=buf;
+  const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=600;
+  const g=audioCtx.createGain(); g.gain.value=0.5;
+  src.connect(lp); lp.connect(g); g.connect(masterGain);
+  src.start(t);
+}
+
+// Player hurt — sharp distorted thud
+function playHurt(){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const osc=audioCtx.createOscillator();
+  osc.type='sawtooth'; osc.frequency.setValueAtTime(180,t); osc.frequency.exponentialRampToValueAtTime(40,t+0.15);
+  const g=audioCtx.createGain(); g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+  const dist=audioCtx.createWaveShaper();
+  const curve=new Float32Array(256);
+  for(let i=0;i<256;i++){const x=i*2/255-1; curve[i]=Math.tanh(x*5);}
+  dist.curve=curve;
+  osc.connect(dist); dist.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t+0.2);
+}
+
+// Item pickup chime — two-tone metallic
+function playPickup(){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  [880,1320].forEach((freq,i)=>{
+    const osc=audioCtx.createOscillator();
+    osc.type='sine'; osc.frequency.value=freq;
+    const g=audioCtx.createGain();
+    g.gain.setValueAtTime(0,t+i*0.08);
+    g.gain.linearRampToValueAtTime(0.18,t+i*0.08+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,t+i*0.08+0.4);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(t+i*0.08); osc.stop(t+i*0.08+0.45);
+  });
+}
+
+// Modulate drone intensity by nearest enemy
+function updateDroneIntensity(){
+  if(!droneGain||!audioCtx)return;
+  const nearest=enemies.reduce((mn,e)=>{
+    if(e.state==='dead')return mn;
+    return Math.min(mn,Math.hypot(e.x-player.x,e.y-player.y));
+  },20);
+  const threat=Math.max(0,1-nearest/8);
+  const target=0.06+threat*0.14;
+  droneGain.gain.setTargetAtTime(target,audioCtx.currentTime,0.8);
+}
+
 function startGame(){
+  initAudio();
   currentLevel=0;
   player.health=100;
   score=0; kills=0;
@@ -414,16 +593,18 @@ function togglePause(){
 function doAttack(){
   if(state!==S.PLAY)return;
   attackFlash=8;
-  weaponKick=9;  // kick gun upward on fire
+  weaponKick=9;
+  playGunshot();  // kick gun upward on fire
   // Check if any enemy is in front within range
   enemies.forEach((e,i)=>{
     if(e.health<=0)return;
     const dx=e.x-player.x, dy=e.y-player.y;
     const dist=Math.hypot(dx,dy);
-    if(dist>2.2)return;
+    if(dist>12)return;  // effective pistol range
     const ang=Math.atan2(dy,dx)-player.angle;
     let a=ang;while(a>Math.PI)a-=Math.PI*2;while(a<-Math.PI)a+=Math.PI*2;
-    if(Math.abs(a)<FOV/2){
+    if(Math.abs(a)>FOV/2)return;  // outside FOV
+    if(!hasLOS(player.x,player.y,e.x,e.y))return;  // wall in the way
       e.health--;
       e.hitFlash=14;
       e.state='chase';
@@ -439,7 +620,6 @@ function doAttack(){
         r:2+Math.random()*7, a:0.65+Math.random()*.3
       });
       if(e.health<=0){e.state='dead';kills++;score+=100;showMsg('+100  ENEMY DOWN');}
-    }
   });
 }
 
@@ -447,8 +627,8 @@ function tryPickup(){
   items.forEach(it=>{
     if(!it.alive)return;
     if(Math.hypot(it.x-player.x,it.y-player.y)>1.0)return;
-    if(it.type==='key'){player.hasKey=true;it.alive=false;showMsg('KEY OBTAINED');}
-    if(it.type==='health'){player.health=Math.min(player.maxHealth,player.health+30);it.alive=false;showMsg('+30 HEALTH');}
+    if(it.type==='key'){player.hasKey=true;it.alive=false;showMsg('KEY OBTAINED');playPickup();}
+    if(it.type==='health'){player.health=Math.min(player.maxHealth,player.health+30);it.alive=false;showMsg('+30 HEALTH');playPickup();}
   });
 }
 
@@ -473,7 +653,21 @@ function loop(ts){
       shakeX=(Math.random()-.5)*shakeMag*2;
       shakeY=(Math.random()-.5)*shakeMag*2;
       bloodSplats=bloodSplats.filter(b=>(b.a-=dt*0.35,b.a>0));
-      bloodDecals=bloodDecals.filter(b=>(b.a-=dt*0.04,b.a>0.05)); // fade slowly
+      bloodDecals=bloodDecals.filter(b=>(b.a-=dt*0.04,b.a>0.05));
+      // ── Audio updates ──
+      dripTimer-=dt;
+      if(dripTimer<=0){
+        playDrip();
+        dripTimer=2.5+Math.random()*6; // drip every 2.5–8.5 seconds
+      }
+      groanTimer-=dt;
+      if(groanTimer<=0){
+        // Distant groan only when an enemy is chasing
+        const anyChasing=enemies.some(e=>e.state==='chase');
+        if(anyChasing)playGrowl();
+        groanTimer=6+Math.random()*10;
+      }
+      updateDroneIntensity();
       lightFlicker=lightFlicker.map(v=>{
         if(Math.random()<0.025)return Math.random()<0.12?0.15:0.8+Math.random()*.2;
         return v+(1.0-v)*0.1;
@@ -565,7 +759,10 @@ function updateEnemies(){
     // Can enemy see player?
     const canSee=distToPlayer<ENEMY_SIGHT && hasLOS(e.x,e.y,player.x,player.y);
 
-    if(canSee){e.state='chase';e.alertTimer=3.0;}
+    if(canSee){
+      if(e.state!=='chase')playGrowl(); // growl on first spot
+      e.state='chase';e.alertTimer=3.0;
+    }
     else if(e.alertTimer>0){e.alertTimer-=dt;}
     else if(e.state==='chase'){e.state='patrol';}
 
@@ -581,8 +778,9 @@ function updateEnemies(){
       if(distToPlayer<ENEMY_ATK_RANGE&&enemyAtkTimers[i]<=0){
         player.health-=12;
         damageFlash=14;
-        shakeMag=5; // shake screen on hit
+        shakeMag=5;
         hurtTimer=0.4;
+        playHurt();
         enemyAtkTimers[i]=ENEMY_ATK_CD;
         if(player.health<=0){player.health=0;state=S.DEAD;}
       }
@@ -1265,48 +1463,89 @@ function drawVHS(){
 
 // ── Screens ───────────────────────────────────────────────────
 function drawTitle(){
-  X.fillStyle='#000';X.fillRect(0,0,RW,RH);
-  if(Math.random()<0.05){X.fillStyle='rgba(255,255,255,.02)';X.fillRect(0,0,RW,RH);}
+  // Solid dark background — no VHS noise here so text is legible
+  X.fillStyle='#060408';X.fillRect(0,0,RW,RH);
 
-  // Game title — two lines, blood drip effect
-  X.font='bold 10px monospace';X.textAlign='center';
-  X.fillStyle='#660000';X.fillText('HILYARD STREET',RW/2+1,30);
-  X.fillStyle='#aa1111';X.fillText('HILYARD STREET',RW/2,29);
-  X.font='bold 14px monospace';
-  X.fillStyle='#880000';X.fillText('HOSPITAL',RW/2+1,46);
-  X.fillStyle='#cc2222';X.fillText('HOSPITAL',RW/2,44);
+  // Subtle top-to-bottom vignette
+  const vg=X.createLinearGradient(0,0,0,RH);
+  vg.addColorStop(0,'rgba(0,0,0,.55)');
+  vg.addColorStop(0.4,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,.7)');
+  X.fillStyle=vg; X.fillRect(0,0,RW,RH);
 
-  // Blood drips from title
+  // ── Title ──────────────────────────────────────────────────
+  X.textAlign='center';
+
+  // Shadow pass
+  X.font='bold 11px monospace';
+  X.fillStyle='rgba(0,0,0,.8)';
+  X.fillText('HILYARD STREET',RW/2+2,34);
+  X.font='bold 16px monospace';
+  X.fillText('HOSPITAL',RW/2+2,54);
+
+  // Main title — bright red, readable
+  X.font='bold 11px monospace';
+  X.fillStyle='#dd2222';
+  X.fillText('HILYARD STREET',RW/2,32);
+  X.font='bold 16px monospace';
+  X.fillStyle='#ff3333';
+  X.fillText('HOSPITAL',RW/2,52);
+
+  // Blood drips
   for(let d=0;d<5;d++){
-    const dx=RW/2-22+d*11, len=5+d*4+(d%2)*3;
-    X.fillStyle='#aa0000';X.fillRect(dx,45,2,len);
-    X.fillStyle='#880000';X.beginPath();X.arc(dx+1,45+len,2,0,Math.PI*2);X.fill();
+    const dx=RW/2-22+d*11, len=6+d*5+(d%2)*4;
+    X.fillStyle='#cc0000';X.fillRect(dx,52,2,len);
+    X.fillStyle='#990000';
+    X.beginPath();X.arc(dx+1,52+len,2.5,0,Math.PI*2);X.fill();
   }
 
-  // Byline
-  X.font='bold 5px monospace';X.fillStyle='#664444';
-  X.fillText('by Ty Alami',RW/2,58);
+  // ── Byline ─────────────────────────────────────────────────
+  X.font='6px monospace';
+  X.fillStyle='#cc8866';
+  X.fillText('by Ty Alami',RW/2,74);
 
-  X.font='bold 5px monospace';X.fillStyle='#7a3333';
-  X.fillText('A SURVIVAL HORROR EXPERIENCE',RW/2,70);
+  X.font='bold 6px monospace';
+  X.fillStyle='#aa4444';
+  X.fillText('A SURVIVAL HORROR EXPERIENCE',RW/2,86);
 
-  X.font='5px monospace';
-  const tips=[
+  // Divider
+  X.fillStyle='#441111';
+  X.fillRect(RW/2-40,92,80,1);
+
+  // ── Story text — bright enough to read ─────────────────────
+  X.font='6px monospace';
+  const story=[
     'The hospital has been dark for three days.',
     'You went in to look for your sister.',
     'Something found you first.',
-    '',
-    'W A S D  —  Move  |  MOUSE / SPACE  —  Shoot',
-    'P  —  Pause  |  Walk over items to pick up',
   ];
-  tips.forEach((t,i)=>{X.fillStyle=i<3?'#775544':'#554444';X.fillText(t,RW/2,84+i*11);});
+  story.forEach((t,i)=>{
+    X.fillStyle='#bbaa99';
+    X.fillText(t,RW/2,102+i*12);
+  });
 
+  // Divider
+  X.fillStyle='#441111';
+  X.fillRect(RW/2-40,140,80,1);
+
+  // ── Controls — clean and readable ──────────────────────────
+  X.font='5px monospace';
+  X.fillStyle='#8899bb';
+  X.fillText('W A S D  /  drag  —  Move & Turn',RW/2,150);
+  X.fillText('Click  /  tap right  —  Shoot',RW/2,161);
+  X.fillText('Walk over items to pick them up',RW/2,172);
+
+  // ── Pulse prompt ───────────────────────────────────────────
   const pu=(Math.sin(Date.now()/500)+1)/2;
-  X.globalAlpha=.4+pu*.55;
-  X.fillStyle='#aa6644';X.font='bold 6px monospace';
-  X.fillText('CLICK OR PRESS ENTER TO BEGIN',RW/2,172);
+  X.globalAlpha=.55+pu*.45;
+  X.font='bold 7px monospace';
+  X.fillStyle='#ffcc44';
+  X.fillText('▶  CLICK OR PRESS ENTER TO BEGIN  ◀',RW/2,190);
   X.globalAlpha=1;
-  drawVHS();
+
+  // Just a single subtle scanline pass — no heavy VHS noise
+  X.fillStyle='rgba(0,0,0,0.06)';
+  for(let y=0;y<RH;y+=2)X.fillRect(0,y,RW,1);
 }
 
 function drawDead(){
