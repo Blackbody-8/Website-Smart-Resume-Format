@@ -43,10 +43,15 @@ nav{width:100%;display:flex;justify-content:space-between;align-items:center;
 // ── Canvas setup ──────────────────────────────────────────────
 const C=document.getElementById('gc');
 const X=C.getContext('2d');
-// PS1 low-res render buffer — intentionally low resolution
-const RW=320, RH=200;
+// Main canvas (UI/HUD at full res)
+const RW=960, RH=600;
 C.width=RW; C.height=RH;
-// Display size
+// Offscreen 3D canvas — rendered at 320x200, scaled up 3x
+const OW=320, OH=200;
+const OC=document.createElement('canvas');
+OC.width=OW; OC.height=OH;
+const OX=OC.getContext('2d');
+OX.imageSmoothingEnabled=false;
 function resize(){
   const wr=window.innerWidth, wh=window.innerHeight-C.parentElement.offsetTop-4;
   const scale=Math.min(wr/RW, wh/RH);
@@ -62,83 +67,111 @@ X.imageSmoothingEnabled=false;
 const MAPW=24,MAPH=18;
 const LEVELS=[
   {
-  // ── LEVEL 0 : INTAKE WARD ───────────────────────────────────
-  // Two large rooms stacked: Reception Ward (top) → Operating Theatre (bottom)
-  // Three wide doorways connect them. Sign plaques on north OR wall.
-  // Locked exit door at bottom of OR. Very simple, impossible to get lost.
-  name:'INTAKE WARD',
+  // ── LEVEL 0: EMERGENCY ROOM ─────────────────────────────────
+  // ER bays (dividers at cols 6,12,17) → 4 doorways → OR (2 tables)
+  // Walls: 7=ward(cream/yellow), 6=OR(dirty white tile)
+  name:'EMERGENCY ROOM',
   map:[
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,1], // RECEPTION north wall
-    [1,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,1], // interior
-    [1,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,1],
-    [1,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,1], // interior
-    [1,7,7,7,0,7,7,7,7,7,0,7,7,7,7,0,7,7,7,7,7,7,7,1], // south wall — 3 doorways
-    [1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1,1,1,1], // narrow gap row
-    [1,6,6,6,0,6,6,6,6,6,0,6,6,6,6,0,6,6,6,6,6,6,6,1], // OR north wall — 3 doorways
+    [1,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,1], // ER north wall
+    [1,7,0,0,0,0,7,0,0,0,0,0,7,0,0,0,0,7,0,0,0,0,7,1], // bay dividers 6,12,17
+    [1,7,0,0,0,0,7,0,0,0,0,0,7,0,0,0,0,7,0,0,0,0,7,1], // bay dividers cont.
+    [1,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,1], // open floor — bays end
+    [1,7,7,7,0,7,7,7,7,0,7,7,7,7,0,7,7,7,7,0,7,7,7,1], // ER south wall — 4 doors at 4,9,14,19
+    [1,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1], // threshold
+    [1,6,6,6,0,6,6,6,6,0,6,6,6,6,0,6,6,6,6,0,6,6,6,1], // OR north wall — same 4 doors
+    [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1], // OR — wide open
     [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1],
-    [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1], // OPERATING THEATRE
     [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1],
     [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1],
-    [1,6,6,6,6,6,6,6,6,6,6,2,6,6,6,6,6,6,6,6,6,6,6,1], // south wall + locked door
+    [1,6,6,6,6,6,6,6,6,6,6,2,6,6,6,6,6,6,6,6,6,6,6,1], // OR south + locked door col 11
     [1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1],
     [1,1,1,1,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1], // EXIT
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   ],
-  playerStart:{x:11.5,y:3.0,angle:Math.PI/2},  // centre of reception, facing south
+  playerStart:{x:11.5,y:2.5,angle:Math.PI/2}, // centre ER, facing OR
   lights:[
-    {x:5, y:2},{x:17,y:2},          // reception overhead
-    {x:11,y:9},{x:4, y:9},{x:18,y:9},// OR surgical + side lights
-    {x:11,y:11},                     // extra OR lamp
+    {x:3, y:2},{x:9, y:2},{x:14,y:2},{x:20,y:2}, // ER bay overheads
+    {x:7, y:10},{x:16,y:10},                       // OR ambient (lamps auto-injected)
   ],
   enemyDefs:[
-    {x:4.5, y:2.5, health:2,state:'idle',   patrolAngle:0},
-    {x:18.5,y:3.5, health:2,state:'patrol', patrolAngle:Math.PI},
-    {x:6.5, y:9.5, health:2,state:'patrol', patrolAngle:Math.PI/2},
-    {x:17.5,y:10.5,health:2,state:'idle',   patrolAngle:0},
-    {x:11.5,y:9.5, health:2,state:'patrol', patrolAngle:Math.PI*1.5},
+    {x:3.5, y:4.5, health:2,state:'patrol',patrolAngle:0},        // bay 1, back wall
+    {x:19.5,y:4.5, health:2,state:'idle',  patrolAngle:Math.PI},   // bay 4, back wall
+    {x:5.5, y:9.5, health:2,state:'patrol',patrolAngle:Math.PI/2}, // OR left
+    {x:17.5,y:10.5,health:2,state:'idle',  patrolAngle:0},         // OR right
+    {x:11.5,y:11.0,health:2,state:'patrol',patrolAngle:Math.PI*1.5},// OR centre-back
+    {x:9.5, y:4.5, health:2,state:'idle',  patrolAngle:Math.PI},   // bay 2 back
   ],
   itemDefs:[
-    {type:'key',   x:18.5,y:10.5},
-    {type:'health',x:4.5, y:3.5},
-    {type:'health',x:18.5,y:9.5},
+    {type:'key',   x:19.5,y:10.5},
+    {type:'health',x:3.5, y:4.0},
+    {type:'health',x:18.5,y:4.0},
   ],
   signDefs:[
-    // Plaque on the OR north wall, visible from reception through doorways
-    {wx:11.5,wy:7.5, label:'OPERATING\nTHEATRE', col:'#1a2e1a'},
-    // Plaque on reception north wall
-    {wx:11.5,wy:1.5, label:'INTAKE WARD', col:'#2e2010'},
+    {wx:11.5,wy:1.4, label:'EMERGENCY ROOM',   col:'#2a1a08'},
+    {wx:3.5, wy:7.2, label:'OPERATING\nTHEATRE', col:'#0e1e0a'},
+    {wx:19.5,wy:7.2, label:'OPERATING\nTHEATRE', col:'#0e1e0a'},
   ],
   propDefs:[
-    // Reception desks + monitors
-    {type:'desk',    x:6.5, y:3.5, solid:true},
-    {type:'monitor', x:5.5, y:3.0, solid:false},
-    {type:'monitor', x:16.5,y:2.5, solid:false},
-    // Ward beds - patients still inside
-    {type:'bed',     x:3.5, y:2.5, solid:true},
-    {type:'corpse',  x:3.5, y:2.5, solid:false},
-    {type:'bed',     x:19.5,y:2.5, solid:true},
-    {type:'corpse',  x:19.5,y:2.5, solid:false},
-    {type:'bed',     x:3.5, y:4.5, solid:true},
-    {type:'bed',     x:19.5,y:4.5, solid:true},
-    // OR: table + lamp + equipment
-    {type:'or_table',x:11.5,y:9.5, solid:true},
-    {type:'corpse',  x:11.5,y:9.5, solid:false},
-    {type:'or_lamp', x:11.5,y:9.5, solid:false},
-    {type:'cart',    x:4.5, y:8.5, solid:false},
-    {type:'cart',    x:18.5,y:8.5, solid:false},
-    {type:'monitor', x:3.5, y:9.5, solid:false},
-    {type:'cart',    x:4.5, y:11.5,solid:false},
-    {type:'monitor', x:19.5,y:11.0,solid:false},
-    {type:'shadow_figure',x:11.5,y:6.5,solid:false},
-    {type:'shadow_figure',x:20.0,y:10.5,solid:false},
+    // === ER BAY 1 (cols 2–5) ===
+    {type:'bed',    x:3.5, y:2.2, solid:true},
+    {type:'corpse', x:3.5, y:2.2, solid:false},
+    {type:'bed',    x:3.5, y:3.2, solid:true},
+    {type:'corpse', x:3.5, y:3.2, solid:false},
+    {type:'monitor',x:4.5, y:2.0, solid:false},
+    // === ER BAY 2 (cols 7–11) ===
+    {type:'bed',    x:9.5, y:2.2, solid:true},
+    {type:'corpse', x:9.5, y:2.2, solid:false},
+    {type:'bed',    x:9.5, y:3.2, solid:true},
+    {type:'cart',   x:10.5,y:2.0, solid:false},
+    // === ER NURSE STATION (centre) ===
+    {type:'desk',   x:11.5,y:4.3, solid:true},
+    {type:'monitor',x:10.8,y:4.2, solid:false},
+    {type:'monitor',x:12.2,y:4.2, solid:false},
+    // === ER BAY 3 (cols 13–16) ===
+    {type:'bed',    x:14.5,y:2.2, solid:true},
+    {type:'corpse', x:14.5,y:2.2, solid:false},
+    {type:'bed',    x:14.5,y:3.2, solid:true},
+    {type:'cart',   x:13.5,y:3.0, solid:false},
+    // === ER BAY 4 (cols 18–21) ===
+    {type:'bed',    x:19.5,y:2.2, solid:true},
+    {type:'corpse', x:19.5,y:2.2, solid:false},
+    {type:'bed',    x:19.5,y:3.2, solid:true},
+    {type:'monitor',x:20.5,y:2.0, solid:false},
+    // === OPERATING THEATRE — dual surgical stations ===
+    {type:'or_table',x:7.5, y:9.8, solid:true},
+    {type:'corpse',  x:7.5, y:9.8, solid:false},
+    {type:'or_lamp', x:7.5, y:9.8, solid:false},
+    {type:'cart',    x:3.5, y:8.8, solid:false},
+    {type:'cart',    x:3.5, y:10.8,solid:false},
+    {type:'monitor', x:2.5, y:9.8, solid:false},
+    {type:'or_table',x:16.5,y:9.8, solid:true},
+    {type:'corpse',  x:16.5,y:9.8, solid:false},
+    {type:'or_lamp', x:16.5,y:9.8, solid:false},
+    {type:'cart',    x:20.5,y:8.8, solid:false},
+    {type:'cart',    x:20.5,y:10.8,solid:false},
+    {type:'monitor', x:21.5,y:9.8, solid:false},
+    // Extra equipment between tables
+    {type:'cart',    x:12.5,y:8.5, solid:false},
+    {type:'monitor', x:11.5,y:11.5,solid:false},
+    // Shadow figures in dark corners + doorway
+    {type:'shadow_figure',x:11.5,y:7.4, solid:false}, // doorway glimpse
+    {type:'shadow_figure',x:21.0,y:11.0,solid:false}, // dark OR corner
+    {type:'shadow_figure',x:2.5, y:11.0,solid:false},
   ],
   stainDefs:[
-    {wx:10.5,wy:9.5},{wx:12.5,wy:9.5},{wx:11.5,wy:10.8},
-    {wx:9.0, wy:9.2},{wx:13.5,wy:10.2},{wx:11.0,wy:8.5},
-    {wx:15.5,wy:11.5},{wx:8.0, wy:10.5},{wx:11.5,wy:11.8},
+    // Massive OR blood pools under both tables
+    {wx:6.5,wy:9.5},{wx:7.5,wy:10.5},{wx:8.5,wy:9.0},{wx:6.0,wy:10.8},
+    {wx:8.0,wy:11.2},{wx:7.0,wy:8.8},{wx:9.0,wy:10.5},
+    {wx:15.5,wy:9.5},{wx:16.5,wy:10.5},{wx:17.5,wy:9.0},{wx:15.0,wy:10.8},
+    {wx:17.0,wy:11.2},{wx:16.0,wy:8.8},{wx:18.0,wy:10.5},
+    // Drag trail from doorway into OR
+    {wx:11.5,wy:8.2},{wx:11.5,wy:9.0},{wx:11.5,wy:9.8},
+    // ER bay stains
+    {wx:3.5,wy:3.8},{wx:4.0,wy:4.2},{wx:9.5,wy:3.8},
+    {wx:14.5,wy:4.0},{wx:19.5,wy:3.8},{wx:20.0,wy:4.5},
   ],
   },
   {
@@ -325,6 +358,162 @@ const WALL_COLS=[
   {light:'#3a4a5e',dark:'#1e2836',ns:'#2e3e52',ew:'#1a2832'},
 ];
 
+// ── WALL TEXTURES — 128×128 pixel bitmaps sampled per-column ─────
+// Each texture is drawn once at startup into an offscreen canvas,
+// then read back as an ImageData for fast pixel lookup.
+const TEX_SIZE=128;
+function mkTex(drawFn){
+  const oc=document.createElement('canvas'); oc.width=oc.height=TEX_SIZE;
+  const ox=oc.getContext('2d'); drawFn(ox,TEX_SIZE);
+  return ox.getImageData(0,0,TEX_SIZE,TEX_SIZE).data; // Uint8ClampedArray RGBA
+}
+
+// Seeded noise helper — deterministic per pixel
+function snoise(x,y,seed){ return (((x*1619+y*31337+seed*6971)^(x>>3)^(y<<4))&0xffffff)/0xffffff; }
+function fbm(x,y,seed,oct){
+  let v=0,a=0.5,f=1;
+  for(let i=0;i<oct;i++){v+=a*snoise(Math.floor(x*f),Math.floor(y*f),seed+i*77);a*=0.5;f*=2.1;}
+  return v;
+}
+
+// ── Texture 1: HOSPITAL TILE (type 6 — OR white) ─────────────────
+const TEX_OR=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  const TW=16,TH=16; // tile cell size in pixels
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const tx=x%TW, ty=y%TH;
+    const tc=Math.floor(x/TW),tr=Math.floor(y/TH);
+    // Grout lines — dark grey, 1-2 px
+    const isGrout=tx<2||ty<2||tx>=TW-1||ty>=TH-1;
+    // Per-tile stain strength
+    const stain=snoise(tc,tr,42);
+    const crack=snoise(tc,tr,77);
+    // Damage zone covering ~45% of tiles
+    const damaged=stain<0.45;
+    // Sub-tile rust/mold detail
+    const noise1=fbm(x/4,y/4,13,3);
+    const noise2=fbm(x/6,y/6,29,2);
+    let r,g,b;
+    if(isGrout){
+      // Grout — stained dark grey-brown
+      const gv=0.25+noise1*0.12;
+      r=Math.floor(60*gv); g=Math.floor(55*gv); b=Math.floor(48*gv);
+    } else if(damaged){
+      // Large decay area — brown rust, dark mould, peeling
+      const dv=0.3+noise1*0.45+noise2*0.25;
+      const mode=(((tc*7+tr*13)^(tc>>1))%4);
+      if(mode<2){r=Math.floor((110+noise2*60)*dv); g=Math.floor((80+noise2*30)*dv); b=Math.floor((50+noise2*20)*dv);}
+      else       {r=Math.floor((60+noise2*40)*dv);  g=Math.floor((65+noise2*30)*dv); b=Math.floor((50+noise2*25)*dv);}
+    } else {
+      // Intact tile — dirty cream-white, slight sheen near top
+      const base=0.68+noise1*0.18+noise2*0.08;
+      const sheenFrac=ty/TH; // 0=top bright, 1=bottom dark
+      const sheen=1.0-sheenFrac*0.30;
+      r=Math.floor(Math.min(255,200*base*sheen));
+      g=Math.floor(Math.min(255,190*base*sheen));
+      b=Math.floor(Math.min(255,165*base*sheen));
+      // Blood micro-stains on some intact tiles
+      if(crack>0.82){r=Math.min(255,r+Math.floor(40*noise2));g=Math.floor(g*0.7);b=Math.floor(b*0.7);}
+    }
+    d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// ── Texture 2: WARD PAINT (type 7 — yellowed cream) ──────────────
+const TEX_WARD=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  const TW=20,TH=20;
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const tx=x%TW, ty=y%TH;
+    const tc=Math.floor(x/TW), tr=Math.floor(y/TH);
+    const isGrout=tx<2||ty<2;
+    const stain=snoise(tc,tr,55); const crack=snoise(tc,tr,88);
+    const damaged=stain<0.42;
+    const noise1=fbm(x/5,y/5,17,3); const noise2=fbm(x/8,y/8,31,2);
+    let r,g,b;
+    if(isGrout){r=Math.floor(55*(0.3+noise1*0.2));g=Math.floor(50*(0.3+noise1*0.2));b=Math.floor(35*(0.3+noise1*0.2));}
+    else if(damaged){
+      const dv=0.35+noise1*0.4+noise2*0.2;
+      r=Math.floor((100+noise2*50)*dv); g=Math.floor((85+noise2*35)*dv); b=Math.floor((45+noise2*20)*dv);
+    } else {
+      const base=0.62+noise1*0.22;
+      r=Math.floor(Math.min(255,190*base)); g=Math.floor(Math.min(255,175*base)); b=Math.floor(Math.min(255,110*base));
+      if(crack>0.84){r=Math.min(255,r-30); g=Math.min(255,g-25); b=Math.min(255,b-20);}
+    }
+    d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// ── Texture 3: MORGUE CONCRETE (type 8) ──────────────────────────
+const TEX_MORGUE=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const noise1=fbm(x/7,y/7,22,4); const noise2=fbm(x/3,y/3,61,2);
+    // Raw concrete — mottled grey-blue, no tiles
+    const base=0.28+noise1*0.38+noise2*0.12;
+    const crack=snoise(Math.floor(x/6),Math.floor(y/6),99);
+    const isConcreteCrack=noise2>0.78&&noise1<0.4;
+    if(isConcreteCrack){d[i]=Math.floor(25*base);d[i+1]=Math.floor(28*base);d[i+2]=Math.floor(38*base);}
+    else{d[i]=Math.floor(68*base);d[i+1]=Math.floor(74*base);d[i+2]=Math.floor(95*base);}
+    d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// ── Texture 4: CORRIDOR (type 1) ─────────────────────────────────
+const TEX_CORR=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  const TW=18,TH=24;
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const tx=x%TW, ty=y%TH;
+    const tc=Math.floor(x/TW), tr=Math.floor(y/TH);
+    const isGrout=tx<2||ty<2;
+    const stain=snoise(tc,tr,33); const noise1=fbm(x/6,y/6,44,3);
+    const damaged=stain<0.38;
+    let r,g,b;
+    if(isGrout){r=30;g=35;b=28;}
+    else if(damaged){const dv=0.25+noise1*0.35;r=Math.floor(55*dv);g=Math.floor(65*dv);b=Math.floor(48*dv);}
+    else{const base=0.45+noise1*0.25;r=Math.floor(88*base);g=Math.floor(100*base);b=Math.floor(80*base);}
+    d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// ── Texture 5: DOOR ──────────────────────────────────────────────
+const TEX_DOOR=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const noise=fbm(x/5,y/5,66,3);
+    // Steel door with panel lines
+    const panelX=Math.abs((x%32)-16)/16;
+    const panelY=Math.abs((y%48)-24)/24;
+    const isPanel=(panelX<0.1||panelY<0.1);
+    const base=isPanel?0.15+noise*0.12:0.35+noise*0.18;
+    const r=Math.floor(90*base); const g2=Math.floor(70*base); const b2=Math.floor(50*base);
+    d[i]=r; d[i+1]=g2; d[i+2]=b2; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// Texture lookup table by wall type
+const WALL_TEX=[null,TEX_CORR,TEX_DOOR,null,null,null,TEX_OR,TEX_WARD,TEX_MORGUE];
+
+// Fast texture sampler — bilinear for close walls, nearest for far
+function sampleTex(tex,u,v){
+  const tx=Math.min(TEX_SIZE-1,Math.max(0,Math.floor(u*(TEX_SIZE-1))));
+  const ty=Math.min(TEX_SIZE-1,Math.max(0,Math.floor(v*(TEX_SIZE-1))));
+  const idx=(ty*TEX_SIZE+tx)*4;
+  return [tex[idx],tex[idx+1],tex[idx+2]];
+}
+
+
 let LIGHT_SOURCES=LEVELS[0].lights;
 let lightFlicker=LIGHT_SOURCES.map(()=>1.0);
 
@@ -337,11 +526,11 @@ const player={
   hasKey:false,
   stamina:100,
 };
-const MOVE_SPD=0.09;
-const TURN_SPD=0.072;
+const MOVE_SPD=5.4;   // world units/sec  (was 0.09/frame × 60fps)
+const TURN_SPD=4.32;  // radians/sec      (was 0.072/frame × 60fps)
 const FOV=Math.PI/3;
 const HALF_FOV=FOV/2;
-const RAYS=RW;
+const RAYS=OW;
 
 // these are populated by loadLevel()
 let items=[];
@@ -392,7 +581,7 @@ function castRays(){
       if(sideDistX<sideDistY){sideDistX+=deltaX;mapX+=stepX;side=0;}
       else{sideDistY+=deltaY;mapY+=stepY;side=1;}
       const c=mapAt(mapX,mapY);
-      if(c>=1&&c<=3){hit=true;wallType=c;}
+      if(c===1||c===2||c===3||c===6||c===7||c===8){hit=true;wallType=c;}
     }
     let dist;
     if(side===0) dist=sideDistX-deltaX;
@@ -409,21 +598,19 @@ function castRays(){
 // ── Sprite projection ─────────────────────────────────────────
 function projectSprite(sx,sy){
   const dx=sx-player.x, dy=sy-player.y;
-  // Rotate into camera space
-  const invDet=1/(Math.cos(player.angle)*Math.sin(player.angle+Math.PI/2)-
-                   Math.sin(player.angle)*Math.cos(player.angle+Math.PI/2));
-  // Simpler: use angle difference
   const spriteDist=Math.hypot(dx,dy);
   const spriteAngle=Math.atan2(dy,dx)-player.angle;
-  // Normalise angle
   let a=spriteAngle;
   while(a>Math.PI)a-=Math.PI*2;
   while(a<-Math.PI)a+=Math.PI*2;
   if(Math.abs(a)>HALF_FOV*1.5)return null;
-  const screenX=Math.floor((0.5+a/FOV)*RW);
-  const h=Math.floor(RH/spriteDist);
+  const screenX=Math.floor((0.5+a/FOV)*RW);  // full-res screen X
+  const h=Math.floor(RH/spriteDist);           // height in full-res pixels
   return{screenX,dist:spriteDist,h,a};
 }
+
+// zBuf lookup: sprites at RW coords, zBuf at OW — divide by scale factor
+const Z_SCALE=RW/OW;  // =3
 
 // ── Zbuffer ───────────────────────────────────────────────────
 let zBuf=new Float32Array(RAYS);
@@ -435,20 +622,32 @@ let introTimer=0;
 
 // ── Input ─────────────────────────────────────────────────────
 const K={};
+let mouseDX=0;
 addEventListener('keydown',e=>{
   K[e.code]=true;
   if(e.code==='KeyP'){togglePause();e.preventDefault();}
   if(e.code==='Space'&&state===S.PLAY){doAttack();e.preventDefault();}
   if(e.code==='KeyE'&&state===S.PLAY){tryPickup();}
+  if(e.code==='KeyF'&&state===S.PLAY){flashlight.on=!flashlight.on;}
   if((e.code==='Space'||e.code==='Enter')&&(state===S.TITLE||state===S.DEAD||state===S.WIN)){startGame();}
   if((e.code==='Space'||e.code==='Enter')&&state===S.INTRO){state=S.PLAY;}
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
 });
 addEventListener('keyup',e=>K[e.code]=false);
+
+// Pointer lock mouse look
 C.addEventListener('click',e=>{
   if(state===S.TITLE||state===S.DEAD||state===S.WIN){startGame();return;}
   if(state===S.INTRO){state=S.PLAY;return;}
-  if(state===S.PLAY)doAttack();
+  if(state===S.PLAY){
+    doAttack();
+    if(!document.pointerLockElement) C.requestPointerLock();
+  }
+});
+document.addEventListener('mousemove',e=>{
+  if(document.pointerLockElement===C&&state===S.PLAY){
+    mouseDX+=e.movementX;
+  }
 });
 
 // ── Dual-zone touch controls ──────────────────────────────────
@@ -513,7 +712,11 @@ let gameTime=0, score=0, kills=0;
 function loadLevel(n){
   const lv=LEVELS[n];
   MAP=lv.map.map(r=>[...r]);
-  LIGHT_SOURCES=lv.lights;
+  // Base lights + inject or_lamp props as strong warm point lights
+  const lampLights=(lv.propDefs||[])
+    .filter(p=>p.type==='or_lamp')
+    .map(p=>({x:Math.floor(p.x), y:Math.floor(p.y), warm:1.0, bright:1.6}));
+  LIGHT_SOURCES=[...lv.lights, ...lampLights];
   lightFlicker=LIGHT_SOURCES.map(()=>1.0);
   player.x=lv.playerStart.x; player.y=lv.playerStart.y; player.angle=lv.playerStart.angle;
   player.health=Math.min(player.maxHealth,player.health||100); player.hasKey=false;
@@ -837,50 +1040,56 @@ function loop(ts){
 }
 
 function handleMovement(){
-  let fw=0,turn=0;
-  // Keyboard
-  if(K['KeyW']||K['ArrowUp'])fw=1;
-  if(K['KeyS']||K['ArrowDown'])fw=-1;
-  if(K['KeyA']||K['ArrowLeft'])turn=-1;
-  if(K['KeyD']||K['ArrowRight'])turn=1;
-  // Left joystick
+  let fw=0, strafe=0, turn=0;
+  if(K['KeyW']||K['ArrowUp'])    fw=1;
+  if(K['KeyS']||K['ArrowDown'])  fw=-1;
+  if(K['KeyA']||K['ArrowLeft'])  turn=-1;
+  if(K['KeyD']||K['ArrowRight']) turn=1;
+
+  // Left joystick: up/down = fwd, left/right = turn
   if(joystick.active){
     const dx=joystick.cx-joystick.sx, dy=joystick.cy-joystick.sy;
     const d=Math.hypot(dx,dy);
-    if(d>6){
-      fw=-dy/Math.max(d,1);   // up = forward
-      turn=dx/Math.max(d,1);  // left/right = turn
-    }
+    if(d>6){ fw=-dy/Math.max(d,1); turn=dx/Math.max(d,1); }
   }
-  // Apply
-  if(turn!==0)player.angle+=turn*TURN_SPD;
+
+  // Mouse look (pointer lock)
+  if(mouseDX!==0){ player.angle+=mouseDX*0.004; mouseDX=0; }
+
+  // Turn
+  if(turn!==0) player.angle+=turn*TURN_SPD*dt;
+
+  const propBlock=(px,py)=>props.some(p=>p.solid&&Math.hypot(p.x-px,p.y-py)<0.5);
+
+  // Forward / backward
   if(fw!==0){
-    const nx=player.x+Math.cos(player.angle)*fw*MOVE_SPD;
-    const ny=player.y+Math.sin(player.angle)*fw*MOVE_SPD;
-    const propBlock=(px,py)=>props.some(p=>p.solid&&Math.hypot(p.x-px,p.y-py)<0.5);
-    if(!isWall(nx,player.y)&&!propBlock(nx,player.y))player.x=nx;
-    if(!isWall(player.x,ny)&&!propBlock(player.x,ny))player.y=ny;
+    const nx=player.x+Math.cos(player.angle)*fw*MOVE_SPD*dt;
+    const ny=player.y+Math.sin(player.angle)*fw*MOVE_SPD*dt;
+    if(!isWall(nx,player.y)&&!propBlock(nx,player.y)) player.x=nx;
+    if(!isWall(player.x,ny)&&!propBlock(player.x,ny)) player.y=ny;
   }
-  // Camera head bob
-  const isMoving=(fw!==0), isTurning=(turn!==0);
-  if(isMoving){
-    camBobAmt=Math.min(1,camBobAmt+dt*5);
-    camBobT+=dt*9;
-  } else {
-    camBobAmt=Math.max(0,camBobAmt-dt*8);
+
+  // Strafe (Q/E keys)
+  if(K['KeyQ']) strafe=-1;
+  if(K['KeyE']) strafe=1;
+  if(strafe!==0){
+    const sa=player.angle+Math.PI/2;
+    const nx=player.x+Math.cos(sa)*strafe*MOVE_SPD*dt;
+    const ny=player.y+Math.sin(sa)*strafe*MOVE_SPD*dt;
+    if(!isWall(nx,player.y)&&!propBlock(nx,player.y)) player.x=nx;
+    if(!isWall(player.x,ny)&&!propBlock(player.x,ny)) player.y=ny;
   }
-  if(isMoving||isTurning){
-    weaponBobAmt=Math.min(1, weaponBobAmt+dt*4);
-    weaponBobT+=dt*8;
-  } else {
-    weaponBobAmt=Math.max(0, weaponBobAmt-dt*6);
-  }
-  // Decay kick
-  weaponKick=Math.max(0, weaponKick-dt*18);
-  weaponSway += (isTurning ? turn*0.6 : -weaponSway*0.12) * dt * 10;
-  // Unlock door
+
+  const isMoving=(fw!==0||strafe!==0), isTurning=(turn!==0);
+  if(isMoving){camBobAmt=Math.min(1,camBobAmt+dt*5);camBobT+=dt*9;}
+  else{camBobAmt=Math.max(0,camBobAmt-dt*8);}
+  if(isMoving||isTurning){weaponBobAmt=Math.min(1,weaponBobAmt+dt*4);weaponBobT+=dt*8;}
+  else{weaponBobAmt=Math.max(0,weaponBobAmt-dt*6);}
+  weaponKick=Math.max(0,weaponKick-dt*18);
+  weaponSway+=((isTurning)?turn*0.6:-weaponSway*0.12)*dt*10;
+
   if(player.hasKey){
-    const mx=Math.floor(player.x), my=Math.floor(player.y);
+    const mx=Math.floor(player.x),my=Math.floor(player.y);
     [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy])=>{
       if(mapAt(mx+dx,my+dy)===2){MAP[my+dy][mx+dx]=0;player.hasKey=false;showMsg('DOOR UNLOCKED');}
     });
@@ -981,121 +1190,152 @@ function render(){
   drawVHS();
 }
 
-// ── World rendering ───────────────────────────────────────────
+// ── 3D World rendering — into offscreen 320×200 canvas ──────────
 function drawWorld(){
-  const bobOffset=Math.sin(camBobT)*3.5*camBobAmt;
-  const roomT=lastRoomType;
+  const bobOffset = Math.sin(camBobT)*2.5*camBobAmt;
+  const horizon   = Math.floor(OH*0.5 + bobOffset);
+  const roomT     = lastRoomType;
 
-  // ── CEILING ─ room-specific, darker near edges, lighter at horizon ──
-  const ceilTopC = roomT===6?'#2a2420': roomT===8?'#0e1018': '#1a1814';
-  const ceilBotC = roomT===6?'#4a4438': roomT===8?'#1e2028': '#363028';
-  const cg=X.createLinearGradient(0,0,0,RH/2+bobOffset);
-  cg.addColorStop(0,ceilTopC); cg.addColorStop(1,ceilBotC);
-  X.fillStyle=cg; X.fillRect(0,0,RW,RH/2+bobOffset);
+  // Frame buffer into the small offscreen canvas
+  const frame = OX.createImageData(OW, OH);
+  const buf   = frame.data;
 
-  // ── FLOOR ─ visible hospital tile, much brighter than before ──
-  // Base colour by room
-  const flBase = roomT===6?[110,105,88]: roomT===7?[95,88,65]: roomT===8?[55,62,72]: [80,78,68];
-  const flDark = roomT===6?[60,55,44]:  roomT===7?[50,45,30]: roomT===8?[28,32,38]: [40,38,32];
-  const horizon=Math.floor(RH/2+bobOffset);
-  // Draw scanline-floor with perspective tile shading
-  for(let y=horizon; y<RH; y++){
-    const t=(y-horizon)/(RH-horizon); // 0 at horizon, 1 at bottom
-    const shade=0.25+t*0.75;          // dark near horizon, bright at feet
-    const r=Math.floor((flBase[0]*shade+flDark[0]*(1-shade)));
-    const g=Math.floor((flBase[1]*shade+flDark[1]*(1-shade)));
-    const b=Math.floor((flBase[2]*shade+flDark[2]*(1-shade)));
-    // Tile grout lines every ~8 scanlines (perspective fakes depth)
-    const groutInterval=Math.max(2, Math.floor(8*t*t*RH));
-    const isGrout=(y%groutInterval<1)&&t>0.05;
-    const gr=isGrout?0.7:1.0;
-    X.fillStyle=`rgb(${Math.floor(r*gr)},${Math.floor(g*gr)},${Math.floor(b*gr)})`;
-    X.fillRect(0,y,RW,1);
+  function putPx(x,y,r,g,b){
+    const i=(y*OW+x)*4;
+    buf[i]=r; buf[i+1]=g; buf[i+2]=b; buf[i+3]=255;
   }
 
-  const rays=castRays();
+  const floorTex = roomT===6?TEX_OR:roomT===7?TEX_WARD:roomT===8?TEX_MORGUE:TEX_CORR;
+  const ceilR    = roomT===8?[12,14,22]:roomT===6?[20,18,14]:[18,16,13];
 
-  for(let col=0;col<RAYS;col++){
-    const {dist,wallType,side,wallX}=rays[col];
+  const cosA=Math.cos(player.angle), sinA=Math.sin(player.angle);
+  const cpX=-sinA*0.66, cpY=cosA*0.66;
+
+  // ── CEILING ────────────────────────────────────────────────
+  for(let y=0; y<horizon; y++){
+    const rD=(horizon-y<1)?1e30:(OH*0.5-bobOffset)/(horizon-y);
+    const fade=Math.max(0,Math.min(0.75,(horizon-y)/horizon*1.1));
+    const stX=rD*cpX*2/OW, stY=rD*cpY*2/OW;
+    let fX=player.x+rD*(cosA-cpX), fY=player.y+rD*(sinA-cpY);
+    for(let x=0;x<OW;x++){
+      const tx=((((fX*0.5)%1)+1)%1*(TEX_SIZE-1))|0;
+      const ty=((((fY*0.5)%1)+1)%1*(TEX_SIZE-1))|0;
+      const idx=(ty*TEX_SIZE+tx)*4;
+      putPx(x,y,(TEX_CORR[idx]*0.16*fade+ceilR[0]*fade)|0,
+               (TEX_CORR[idx+1]*0.16*fade+ceilR[1]*fade)|0,
+               (TEX_CORR[idx+2]*0.16*fade+ceilR[2]*fade)|0);
+      fX+=stX; fY+=stY;
+    }
+  }
+
+  // Ceiling pipes
+  const p1=(horizon*0.25)|0, p2=(horizon*0.50)|0;
+  for(let x=0;x<OW;x++){
+    for(let py=p1;py<p1+2;py++) putPx(x,py,14,12,9);
+    putPx(x,p1,55,50,42);
+    putPx(x,p2,16,14,11);
+    if(x%13<1) for(let py=0;py<p1+2;py++) putPx(x,py,11,10,8);
+    if((x+7)%13<1) for(let py=p1;py<p2+1;py++) putPx(x,py,14,12,10);
+  }
+
+  // ── FLOOR ──────────────────────────────────────────────────
+  for(let y=horizon+1; y<OH; y++){
+    const t=(y-horizon)/(OH-horizon);
+    const rD=(OH*0.5-bobOffset)/(y-horizon+0.001);
+    const shade=Math.max(0.07,0.12+t*0.88);
+
+    // Per-row lighting
+    let rowCool=0, rowWarm=0;
+    for(let li=0;li<LIGHT_SOURCES.length;li++){
+      const ls=LIGHT_SOURCES[li];
+      const d=Math.sqrt((ls.x+0.5-player.x)**2+(ls.y+0.5-player.y)**2);
+      if(ls.warm) rowWarm+=Math.max(0,1-d/8)*lightFlicker[li]*(ls.bright||1.4)*0.7;
+      else        rowCool+=Math.max(0,1-d/14)*lightFlicker[li]*0.85;
+    }
+    if(flashlight.on&&!flashlight.flicker) rowCool+=Math.max(0,1-rD/12)*0.8;
+    const L=Math.min(1.0,(0.18+rowCool)*shade);
+    const wr=Math.min(48,rowWarm*48)|0, wg=Math.min(24,rowWarm*24)|0;
+
+    const stX=rD*cpX*2/OW, stY=rD*cpY*2/OW;
+    let fX=player.x+rD*(cosA-cpX), fY=player.y+rD*(sinA-cpY);
+    const db=(y&1)?2:-2;
+    for(let x=0;x<OW;x++){
+      const tx=((((fX%1)+1)%1)*(TEX_SIZE-1))|0;
+      const ty=((((fY%1)+1)%1)*(TEX_SIZE-1))|0;
+      const idx=(ty*TEX_SIZE+tx)*4;
+      putPx(x,y,
+        Math.min(255,Math.max(0,(floorTex[idx  ]*L+wr+((x&1)?db:-db))|0)),
+        Math.min(255,Math.max(0,(floorTex[idx+1]*L+wg)|0)),
+        Math.min(255,Math.max(0,(floorTex[idx+2]*L)|0))
+      );
+      fX+=stX; fY+=stY;
+    }
+  }
+
+  // ── WALLS — 320-column DDA ─────────────────────────────────
+  for(let col=0; col<OW; col++){
+    const rayAngle=player.angle-HALF_FOV+(col/OW)*FOV;
+    const rdx=Math.cos(rayAngle), rdy=Math.sin(rayAngle);
+    let mX=player.x|0, mY=player.y|0;
+    const dX=Math.abs(1/rdx)||1e30, dY=Math.abs(1/rdy)||1e30;
+    let sX,sY,stepX,stepY,side=0,wType=1;
+    stepX=rdx<0?-1:1; sX=rdx<0?(player.x-mX)*dX:(mX+1-player.x)*dX;
+    stepY=rdy<0?-1:1; sY=rdy<0?(player.y-mY)*dY:(mY+1-player.y)*dY;
+    for(let i=0;i<64;i++){
+      if(sX<sY){sX+=dX;mX+=stepX;side=0;}else{sY+=dY;mY+=stepY;side=1;}
+      const cv=mapAt(mX,mY);
+      if(cv===1||cv===2||cv===3||cv===6||cv===7||cv===8){wType=cv;break;}
+    }
+    const dist=Math.max(0.01, side===0?sX-dX:sY-dY);
+    const wallX=((side===0?(player.y+dist*rdy):(player.x+dist*rdx))%1+1)%1;
     zBuf[col]=dist;
 
-    const lineH=Math.floor(RH/dist);
-    const drawStart=Math.max(0,Math.floor((RH+bobOffset*2-lineH)/2));
-    const drawEnd  =Math.min(RH-1,Math.floor((RH+bobOffset*2+lineH)/2));
+    const lineH=OH/dist;
+    const wallTopF=(OH+bobOffset*2-lineH)*0.5;
+    const drawS=Math.max(0,wallTopF|0);
+    const drawE=Math.min(OH-1,(wallTopF+lineH)|0);
 
-    const wc=WALL_COLS[Math.min(wallType,WALL_COLS.length-1)]||WALL_COLS[1];
-    const baseCol=side===0?(wallX>0.5?wc.light:wc.ns):(wallX>0.5?wc.ew:wc.dark);
-    const r0=parseInt(baseCol.slice(1,3),16);
-    const g0=parseInt(baseCol.slice(3,5),16);
-    const b0=parseInt(baseCol.slice(5,7),16);
-
-    // ── Per-column lighting ──────────────────────────────────
-    // 1. Ambient — dim but visible hospital emergency lighting
-    let ambient=0.42;
-
-    // 2. Nearest overhead light contribution
-    let lightAdd=0;
-    LIGHT_SOURCES.forEach((ls,li)=>{
-      const ldx=ls.x+0.5-player.x, ldy=ls.y+0.5-player.y;
-      const ldist=Math.hypot(ldx,ldy);
-      if(ldist>10)return;
-      const rayAngle=player.angle - HALF_FOV + (col/RAYS)*FOV;
-      const toLight=Math.atan2(ldy,ldx);
-      let da=toLight-rayAngle;
-      while(da>Math.PI)da-=Math.PI*2;
-      while(da<-Math.PI)da+=Math.PI*2;
-      if(Math.abs(da)>Math.PI*0.7)return;
-      const falloff=Math.max(0, 1-(ldist+dist*0.4)/9);
-      lightAdd+=falloff*lightFlicker[li]*0.70;
-    });
-
-    // 3. Flashlight — wide readable cone
-    let flAdd=0;
+    const wx=player.x+rdx*dist, wy=player.y+rdy*dist;
+    let cool=0, warm=0;
+    for(let li=0;li<LIGHT_SOURCES.length;li++){
+      const ls=LIGHT_SOURCES[li];
+      const ldx=ls.x+0.5-wx, ldy=ls.y+0.5-wy;
+      const d=Math.sqrt(ldx*ldx+ldy*ldy);
+      if(ls.warm) warm+=Math.max(0,1-d/8.0)*lightFlicker[li]*(ls.bright||1.4)*0.9;
+      else        cool+=Math.max(0,1-d/13 )*lightFlicker[li]*1.0;
+    }
     if(flashlight.on&&!flashlight.flicker){
-      const edgeFrac=Math.abs((col/RW)-0.5)*2;
-      const cone=Math.max(0,1-edgeFrac*edgeFrac*1.4);
-      const distFade=Math.max(0,1-dist/13);
-      flAdd=cone*distFade*0.9;
+      let a=rayAngle-player.angle;
+      while(a>Math.PI)a-=Math.PI*2; while(a<-Math.PI)a+=Math.PI*2;
+      cool+=Math.max(0,1-Math.abs(a)/HALF_FOV)*Math.max(0,1-dist/14)*1.3;
     }
+    const distSh=Math.max(0.18,1-dist/28)*(side===1?0.82:1.0);
+    const L=Math.min(1.0,(0.22+cool)*distSh);
+    const wr=Math.min(52,warm*52)|0, wg=Math.min(27,warm*27)|0;
 
-    // 4. Combine
-    const distShade=Math.max(0.25, 1-dist/18);
-    const bright=Math.min(1, (ambient + lightAdd + flAdd) * distShade);
-
-    // Tile grout — vertical lines every 0.5 units, horizontal bands every 0.33
-    let groutMul=1.0;
-    if(wallType===6||wallType===7||wallType===8){
-      // Vertical grout
-      const gv=wallX%0.5;
-      if(gv<0.02||gv>0.48) groutMul=0.35;
-      // Horizontal grout — use drawStart/drawEnd position ratio within wall slice
-      const wallFrac=(col%3===0)?0.5:0; // approximate scanline for tile rows
-      if(wallFrac>0.32&&wallFrac<0.34) groutMul*=0.4;
-      // Stain patches (OR walls)
-      if(wallType===6){
-        const seed=(Math.floor(col*0.4)*17+Math.floor(wallX*30)*7)%100;
-        if(seed<6) groutMul*=0.60;
-      }
+    const tex=WALL_TEX[wType];
+    const texX=Math.max(0,Math.min(TEX_SIZE-1,(wallX*(TEX_SIZE-1))|0));
+    for(let y=drawS; y<=drawE; y++){
+      const vFrac=Math.max(0,Math.min(0.9999,(y-wallTopF)/lineH));
+      const texY=(vFrac*(TEX_SIZE-1))|0;
+      const idx=(texY*TEX_SIZE+texX)*4;
+      const db=((col^y)&1)?3:-3;
+      if(!tex){ putPx(col,y,15,(140*L)|0,(45*L)|0); continue; }
+      putPx(col,y,
+        Math.min(255,Math.max(0,(tex[idx  ]*L+wr+db)|0)),
+        Math.min(255,Math.max(0,(tex[idx+1]*L+wg+db)|0)),
+        Math.min(255,Math.max(0,(tex[idx+2]*L+db)|0))
+      );
     }
-
-    // PS1 warm tint — OR walls slightly warm, ward is yellow-green
-    let tr=0.88,tg=1.0,tb=0.88;
-    if(wallType===6){tr=0.90;tg=1.02;tb=0.82;}
-    else if(wallType===7){tr=1.00;tg=1.00;tb=0.72;}
-    else if(wallType===8){tr=0.78;tg=0.88;tb=1.05;}
-
-    const r=Math.min(255,Math.floor(r0*bright*tr*groutMul));
-    const g=Math.min(255,Math.floor(g0*bright*tg*groutMul));
-    const b=Math.min(255,Math.floor(b0*bright*tb*groutMul));
-
-    // PS1-style dither: every 2nd column at far distance gets dimmer
-    const dither=(col%2===1&&dist>4)?-10:0;
-    X.fillStyle=`rgb(${Math.max(0,r+dither)},${Math.max(0,g+dither)},${Math.max(0,b+dither)})`;
-    X.fillRect(col,drawStart,1,drawEnd-drawStart);
   }
+
+  OX.putImageData(frame,0,0);
+  // Scale up to fill main canvas (3× upscale, crisp pixels)
+  X.imageSmoothingEnabled=false;
+  X.drawImage(OC,0,0,RW,RH);
 }
 
-// ── Sprite rendering ──────────────────────────────────────────
+// ── Sprite rendering ─────────────────────────────────────────
 function drawSprites(){
   // Gather all sprites (enemies + items + props)
   const sprites=[];
@@ -1128,7 +1368,7 @@ function drawSprites(){
 
       for(let col=x0;col<x0+w;col++){
         if(col<0||col>=RW)continue;
-        if(dist>zBuf[col])continue;
+        if(dist>zBuf[(col/Z_SCALE)|0])continue;
         const u=(col-x0)/w;
 
         // ── Gaunt creature anatomy in UV ──────────────────────
@@ -1258,7 +1498,7 @@ function drawSprites(){
 
       for(let col=px0;col<px0+pw;col++){
         if(col<0||col>=RW)continue;
-        if(dist>zBuf[col])continue;
+        if(dist>zBuf[(col/Z_SCALE)|0])continue;
         const u=(col-px0)/pw;
 
         // ── OPERATING TABLE ────────────────────────────────
@@ -1525,7 +1765,7 @@ function drawSprites(){
       const ih=Math.floor(h*.5);
       for(let col=x0+Math.floor(w*.3);col<x0+Math.floor(w*.7);col++){
         if(col<0||col>=RW)continue;
-        if(dist>zBuf[col])continue;
+        if(dist>zBuf[(col/Z_SCALE)|0])continue;
         X.fillStyle=col2;
         X.fillRect(col,y0,1,ih);
       }
@@ -1544,7 +1784,7 @@ function drawSprites(){
     const sp=projectSprite(b.wx,b.wy);
     if(!sp)return;
     const {screenX,dist}=sp;
-    if(dist>zBuf[screenX])return;
+    if(dist>zBuf[(screenX/Z_SCALE)|0])return;
     // Flat ellipse at floor level
     const floorY=Math.floor(RH/2 + Math.min(RH/2-2, RH/(dist*2.2)));
     const pw=Math.max(1,Math.floor(RH/(dist*1.8)));
@@ -1577,7 +1817,7 @@ function drawSigns(){
     const py=Math.floor(RH/2 - h*0.08); // just above horizon = eye level on wall
 
     // Occlusion — skip if something is closer in the middle column
-    if(zBuf[Math.min(RW-1,Math.max(0,screenX))]<dist-0.3)return;
+    if(zBuf[Math.min(RAYS-1,Math.max(0,(screenX/Z_SCALE)|0))]<dist-0.3)return;
 
     // Draw plaque body — dark institutional green/wood
     const bgColor=sign.col||'#1a2e1a';
@@ -1615,24 +1855,18 @@ function drawSigns(){
 function drawFlashlight(){
   const cx=RW/2, cy=RH/2;
   if(flashlight.on && !flashlight.flicker){
-    // Cone of light — bright oval in centre, hard darkness at edges
-    const vg=X.createRadialGradient(cx,cy-10,4, cx,cy,RH*.6);
+    // Soft vignette — darkens corners but keeps centre clear
+    const vg=X.createRadialGradient(cx,cy-20,RH*0.05, cx,cy,RH*0.72);
     vg.addColorStop(0,'rgba(0,0,0,0)');
-    vg.addColorStop(0.45,'rgba(0,0,0,0)');
-    vg.addColorStop(0.72,'rgba(0,0,0,0.55)');
-    vg.addColorStop(1,'rgba(0,0,0,0.96)');
+    vg.addColorStop(0.55,'rgba(0,0,0,0)');
+    vg.addColorStop(0.80,'rgba(0,0,0,0.40)');
+    vg.addColorStop(1,'rgba(0,0,0,0.75)');
     X.fillStyle=vg; X.fillRect(0,0,RW,RH);
-    // Subtle warm tint from flashlight centre
-    const wg=X.createRadialGradient(cx,cy,0,cx,cy,RH*.3);
-    wg.addColorStop(0,'rgba(255,240,200,0.04)');
-    wg.addColorStop(1,'rgba(0,0,0,0)');
-    X.fillStyle=wg; X.fillRect(0,0,RW,RH);
   } else {
-    // Flashlight off — near total darkness, only faint emergency green
-    X.fillStyle='rgba(0,0,0,0.88)'; X.fillRect(0,0,RW,RH);
-    // Tiny green ember glow at centre
-    const eg=X.createRadialGradient(cx,cy,0,cx,cy,30);
-    eg.addColorStop(0,'rgba(0,60,20,0.18)');
+    // Flashlight off — dim but not blind, keep some ambient
+    X.fillStyle='rgba(0,0,0,0.60)'; X.fillRect(0,0,RW,RH);
+    const eg=X.createRadialGradient(cx,cy,0,cx,cy,80);
+    eg.addColorStop(0,'rgba(0,50,15,0.12)');
     eg.addColorStop(1,'rgba(0,0,0,0)');
     X.fillStyle=eg; X.fillRect(0,0,RW,RH);
   }
@@ -1653,1896 +1887,153 @@ function drawBloodSplats(){
 
 // ── Cold hospital color grade ─────────────────────────────────
 function drawColorGrade(){
-  // Desaturating blue-green tint over everything — RE1 / Silent Hill feel
-  X.fillStyle='rgba(0,15,25,0.18)'; X.fillRect(0,0,RW,RH);
-  // Subtle green scanline shimmer on ceiling half
-  X.fillStyle='rgba(0,20,8,0.10)'; X.fillRect(0,0,RW,RH/2);
+  // Soft vignette — subtle corners only, don't crush the scene
+  const vg=X.createRadialGradient(RW/2,RH/2,RH*0.25,RW/2,RH/2,RH*0.78);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.38)');
+  X.fillStyle=vg; X.fillRect(0,0,RW,RH);
+  // Very faint hospital green tint — atmospheric not blinding
+  X.fillStyle='rgba(8,12,0,0.10)'; X.fillRect(0,0,RW,RH);
+  // Light scanline — PS2 CRT feel, barely visible
+  for(let y=0;y<RH;y+=2){
+    X.fillStyle='rgba(0,0,0,0.04)';
+    X.fillRect(0,y,RW,1);
+  }
 }
 
 // ── HUD ───────────────────────────────────────────────────────
 function drawHUD(){
-  // Health bar
+  const BAR_W=180, BAR_H=20, BAR_X=14, FONT='bold 16px monospace';
+
+  // ── Health bar ──────────────────────────────────────────────
   const hpPct=player.health/player.maxHealth;
   const hpCol=hpPct>0.5?'#22cc44':hpPct>0.25?'#ccaa00':'#cc2222';
-  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(3,RH-14,62,10);
-  X.fillStyle=hpCol;X.fillRect(4,RH-13,Math.floor(60*hpPct),8);
-  X.strokeStyle='rgba(255,255,255,.3)';X.lineWidth=1;X.strokeRect(3,RH-14,62,10);
-  X.font='bold 5px monospace';X.fillStyle='#fff';X.textAlign='left';
-  X.fillText(`HP ${player.health}`,4,RH-17);
+  X.fillStyle='rgba(0,0,0,.7)';  X.fillRect(BAR_X-2,RH-BAR_H*2-32,BAR_W+4,BAR_H+4);
+  X.fillStyle=hpCol;              X.fillRect(BAR_X,  RH-BAR_H*2-30,Math.floor(BAR_W*hpPct),BAR_H);
+  X.strokeStyle='rgba(255,255,255,.4)'; X.lineWidth=1.5;
+  X.strokeRect(BAR_X-2,RH-BAR_H*2-32,BAR_W+4,BAR_H+4);
+  X.font=FONT; X.fillStyle='#fff'; X.textAlign='left';
+  X.fillText(`HP  ${player.health}`,BAR_X,RH-BAR_H*2-36);
 
-  // Flashlight battery
+  // ── Flashlight bar ──────────────────────────────────────────
   const batPct=flashlight.battery/100;
-  const batCol=batPct>0.4?'#4488ff':batPct>0.2?'#8844ff':'#ff4444';
-  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(3,RH-28,62,8);
-  X.fillStyle=batCol;X.fillRect(4,RH-27,Math.floor(60*batPct),6);
-  X.strokeStyle='rgba(255,255,255,.3)';X.lineWidth=1;X.strokeRect(3,RH-28,62,8);
-  X.font='bold 5px monospace';X.fillStyle='#aaaaff';X.textAlign='left';
-  X.fillText(`LIGHT`,4,RH-31);
+  const batCol=batPct>0.4?'#4488ff':batPct>0.2?'#9944ff':'#ff4444';
+  X.fillStyle='rgba(0,0,0,.7)';  X.fillRect(BAR_X-2,RH-BAR_H-8,BAR_W+4,BAR_H+4);
+  X.fillStyle=batCol;             X.fillRect(BAR_X,  RH-BAR_H-6,Math.floor(BAR_W*batPct),BAR_H);
+  X.strokeStyle='rgba(255,255,255,.4)'; X.strokeRect(BAR_X-2,RH-BAR_H-8,BAR_W+4,BAR_H+4);
+  X.font=FONT; X.fillStyle='#aaaaff'; X.textAlign='left';
+  X.fillText('LIGHT',BAR_X,RH-BAR_H-12);
 
-  // Key indicator
+  // ── Key indicator ───────────────────────────────────────────
   if(player.hasKey){
-    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW-28,RH-22,24,18);
-    X.fillStyle='#ffdd44';X.font='bold 7px monospace';X.textAlign='center';
-    X.fillText('KEY',RW-16,RH-10);
+    X.fillStyle='rgba(0,0,0,.7)'; X.fillRect(BAR_X,RH-BAR_H*3-54,100,26);
+    X.fillStyle='#ffdd44'; X.font='bold 18px monospace'; X.textAlign='left';
+    X.fillText('🔑  KEY',BAR_X+6,RH-BAR_H*3-36);
   }
 
-  // ── Level + score top-right ──
-  X.font='bold 6px monospace';X.textAlign='right';
-  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(RW-82,2,80,24);
-  X.fillStyle='#ffdd44';X.fillText(`SCORE ${score}`,RW-4,11);
-  X.fillStyle='#ff8844';X.fillText(`LV${currentLevel+1} ${LEVELS[currentLevel].name.slice(0,9)}`,RW-4,21);
-
-  // ── Crosshair — turns red when enemy in range ──
-  const cx=RW/2,cy=RH/2;
-  const enemyClose=enemies.some(e=>e.state!=='dead'&&Math.hypot(e.x-player.x,e.y-player.y)<2.2);
-  X.strokeStyle=enemyClose?'rgba(255,60,60,.9)':'rgba(255,255,255,.7)';
-  X.lineWidth=1;
-  X.beginPath();X.moveTo(cx-5,cy);X.lineTo(cx-2,cy);X.stroke();
-  X.beginPath();X.moveTo(cx+2,cy);X.lineTo(cx+5,cy);X.stroke();
-  X.beginPath();X.moveTo(cx,cy-5);X.lineTo(cx,cy-2);X.stroke();
-  X.beginPath();X.moveTo(cx,cy+2);X.lineTo(cx,cy+5);X.stroke();
-  if(enemyClose){
-    X.strokeStyle='rgba(255,60,60,.4)';
-    X.beginPath();X.arc(cx,cy,4,0,Math.PI*2);X.stroke();
-  }
-
-  // ── GoldenEye-style first-person gun ─────────────────────────
-  const bobY = Math.sin(weaponBobT) * 5 * weaponBobAmt;
-  const bobX = Math.sin(weaponBobT * 0.5) * 3 * weaponBobAmt;
-  // Prominent position — large, bottom-right, partially off screen
-  const gx = RW - 88 + bobX + weaponSway * 4;
-  const gy = RH - 52 + bobY - weaponKick * 1.5;
-
-  X.save();
-  X.translate(gx, gy);
-  X.scale(1.55, 1.55);  // GoldenEye scale — dominates bottom-right
-
-  // ── GoldenEye silver silenced pistol ─────────────────────────
-  // Gun shadow
-  X.fillStyle = 'rgba(0,0,0,.4)';
-  X.fillRect(2, 5, 80, 35);
-
-  // ── SILENCER — long cylinder extending forward ──
-  // Outer silencer body — dark gunmetal cylinder
-  X.fillStyle = '#484848';
-  X.fillRect(46, 4, 36, 11);
-  // Silencer top highlight (chrome glint)
-  X.fillStyle = '#888';
-  X.fillRect(46, 4, 36, 3);
-  // Silencer mid band — subtle light stripe
-  X.fillStyle = '#666';
-  X.fillRect(46, 7, 36, 2);
-  // Silencer shadow underside
-  X.fillStyle = '#222';
-  X.fillRect(46, 13, 36, 2);
-  // Silencer end cap
-  X.fillStyle = '#333';
-  X.fillRect(80, 3, 4, 13);
-  X.fillStyle = '#555';
-  X.fillRect(80, 3, 4, 3);
-  // Silencer wrap rings (detail)
-  X.fillStyle = '#383838';
-  for(let r=0;r<4;r++){X.fillRect(51+r*8,4,1,11);}
-
-  // ── PISTOL BODY — silver chrome ──
-  // Main slide — silver with PS1 flat-shade faces
-  X.fillStyle = '#a0a8b0';  // silver
-  X.beginPath();
-  X.moveTo(16, 8);
-  X.lineTo(50, 8);
-  X.lineTo(50, 20);
-  X.lineTo(16, 20);
-  X.closePath();
-  X.fill();
-  // Slide top highlight — brighter chrome
-  X.fillStyle = '#c8d0d8';
-  X.fillRect(16, 8, 34, 4);
-  // Slide bottom shadow
-  X.fillStyle = '#788090';
-  X.fillRect(16, 17, 34, 3);
-  // Serrations on rear of slide (grip texture)
-  X.fillStyle = '#6a7280';
-  for(let s=0;s<5;s++){X.fillRect(17+s*2,9,1,9);}
-  // Ejection port cut-out
-  X.fillStyle = '#2a2a2a';
-  X.fillRect(32, 9, 10, 6);
-  // Ejection port inner glint
-  X.fillStyle = '#444';
-  X.fillRect(32, 9, 10, 2);
-
-  // Frame / dust cover (below slide) — slightly darker silver
-  X.fillStyle = '#8a9298';
-  X.fillRect(20, 20, 30, 8);
-  X.fillStyle = '#9aA2a8';
-  X.fillRect(20, 20, 30, 3);
-  // Rail detail on dust cover
-  X.fillStyle = '#707880';
-  X.fillRect(22, 23, 26, 2);
-
-  // ── GRIP — dark polymer, slightly angled ──
-  X.fillStyle = '#222228';
-  X.beginPath();
-  X.moveTo(18, 20);
-  X.lineTo(24, 20);
-  X.lineTo(22, 42);
-  X.lineTo(12, 42);
-  X.closePath();
-  X.fill();
-  // Grip highlight face
-  X.fillStyle = '#333338';
-  X.beginPath();
-  X.moveTo(18, 20);
-  X.lineTo(24, 20);
-  X.lineTo(23, 26);
-  X.lineTo(17, 26);
-  X.closePath();
-  X.fill();
-  // Grip stippling
-  X.fillStyle = '#1a1a20';
-  for(let gy2=28;gy2<40;gy2+=3){
-    for(let gx2=13;gx2<22;gx2+=2){X.fillRect(gx2,gy2,1,1);}
-  }
-  // Mag base
-  X.fillStyle = '#181818';
-  X.fillRect(11, 40, 12, 3);
-
-  // Trigger guard — silver wire loop
-  X.strokeStyle = '#8090a0'; X.lineWidth = 1.5;
-  X.beginPath();
-  X.moveTo(26, 20);
-  X.quadraticCurveTo(24, 30, 32, 30);
-  X.stroke();
-  // Trigger
-  X.fillStyle = '#909898';
-  X.fillRect(28, 22, 2, 6);
-
-  // ── ARM / HAND rising from bottom ──
-  X.fillStyle = '#141210';  // dark jacket
-  X.beginPath();
-  X.moveTo(8, 38);
-  X.lineTo(22, 26);
-  X.lineTo(36, 28);
-  X.lineTo(46, 36);
-  X.lineTo(46, 60);
-  X.lineTo(8, 60);
-  X.closePath();
-  X.fill();
-  // Sleeve highlight
-  X.fillStyle = '#1e1c18';
-  X.beginPath();
-  X.moveTo(8, 38);
-  X.lineTo(22, 26);
-  X.lineTo(36, 28);
-  X.lineTo(46, 36);
-  X.closePath();
-  X.fill();
-  // Hand — wrapping grip
-  X.fillStyle = '#5a3c28';
-  X.beginPath();
-  X.moveTo(14, 32);
-  X.lineTo(22, 24);
-  X.lineTo(34, 26);
-  X.lineTo(38, 34);
-  X.lineTo(14, 36);
-  X.closePath();
-  X.fill();
-  // Knuckle highlight
-  X.fillStyle = '#6a4c38';
-  X.fillRect(16, 26, 16, 4);
-  // Thumb detail
-  X.fillStyle = '#5a3c28';
-  X.fillRect(38, 28, 6, 8);
-
-  // ── Muzzle flash — at silencer tip ──
-  if(attackFlash > 4){
-    const fa = (attackFlash - 4) / 4;
-    X.globalAlpha = fa;
-    // Suppressed flash — smaller, mostly white with slight yellow
-    X.fillStyle = '#ffffff';
-    X.beginPath(); X.arc(83, 9, 4*fa, 0, Math.PI*2); X.fill();
-    X.fillStyle = '#ffffaa';
-    X.beginPath(); X.arc(83, 9, 6*fa, 0, Math.PI*2); X.fill();
-    // Tight spikes (silencer suppresses most flash)
-    X.strokeStyle = '#ffffcc'; X.lineWidth = 1;
-    for(let i=0;i<4;i++){
-      const ang=i/4*Math.PI*2;
-      X.globalAlpha=fa*0.5;
-      X.beginPath();
-      X.moveTo(83,9);
-      X.lineTo(83+Math.cos(ang)*7*fa, 9+Math.sin(ang)*5*fa);
-      X.stroke();
-    }
-    // Very subtle screen flash (silenced)
-    X.globalAlpha=fa*0.08;
-    X.fillStyle='#ffffaa';
-    X.fillRect(-gx,-gy,RW,RH);
-    X.globalAlpha=1;
-  }
-
-  X.restore();
-
-  // Damage flash
-  if(damageFlash>0){
-    X.globalAlpha=damageFlash/14*.45;
-    X.fillStyle='#cc0000';X.fillRect(0,0,RW,RH);
-    X.globalAlpha=1;
-  }
-
-  // Minimap (tiny, corner)
-  drawMinimap();
-}
-
-function drawMinimap(){
-  const ms=3, ox=RW-MAPW*ms-3, oy=3;
-  X.fillStyle='rgba(0,0,0,.7)';X.fillRect(ox-1,oy-1,MAPW*ms+2,MAPH*ms+2);
-  for(let my=0;my<MAPH;my++){
-    for(let mx=0;mx<MAPW;mx++){
-      const v=MAP[my][mx];
-      if(v===0)continue;
-      X.fillStyle=v===1?'#333':v===2?'#622':v===3?'#252':v===6?'#163':v===7?'#554':v===8?'#246':'#444';
-      X.fillRect(ox+mx*ms,oy+my*ms,ms,ms);
-    }
-  }
-  // Items
-  items.forEach(it=>{
-    if(!it.alive)return;
-    X.fillStyle=it.type==='key'?'#ffdd44':'#44ff88';
-    X.fillRect(ox+Math.floor(it.x)*ms,oy+Math.floor(it.y)*ms,ms,ms);
-  });
-  // Enemies
-  enemies.forEach(e=>{
-    if(e.state==='dead')return;
-    X.fillStyle=e.state==='chase'?'#ff4444':'#884444';
-    X.fillRect(ox+Math.floor(e.x)*ms+1,oy+Math.floor(e.y)*ms+1,ms-1,ms-1);
-  });
-  // Player
-  X.fillStyle='#44aaff';
-  X.fillRect(ox+Math.floor(player.x)*ms,oy+Math.floor(player.y)*ms,ms,ms);
-  // Direction
-  X.strokeStyle='#44aaff';X.lineWidth=1;
-  X.beginPath();
-  X.moveTo(ox+player.x*ms,oy+player.y*ms);
-  X.lineTo(ox+player.x*ms+Math.cos(player.angle)*5,oy+player.y*ms+Math.sin(player.angle)*5);
-  X.stroke();
-}
-
-function drawMessages(){
-  if(msgTimer>0&&msgText){
-    const a=Math.min(1,msgTimer);
-    X.globalAlpha=a;
-    X.font='bold 8px monospace';X.textAlign='center';
-    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-40,4,80,12);
-    X.fillStyle='#ffffaa';X.fillText(msgText,RW/2,13);
-    X.globalAlpha=1;
-  }
-
-  // Item proximity glow hint — no button needed, just walk over
-  items.forEach(it=>{
-    if(!it.alive)return;
-    if(Math.hypot(it.x-player.x,it.y-player.y)<1.5){
-      const pulse=(Math.sin(gameTime*6)+1)/2;
-      X.globalAlpha=0.5+pulse*0.45;
-      X.font='bold 6px monospace';X.textAlign='center';
-      X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-32,RH/2+10,64,10);
-      X.fillStyle='#ffdd88';
-      X.fillText(it.type==='key'?'▶ KEY — WALK OVER':'▶ MEDS — WALK OVER',RW/2,RH/2+18);
-      X.globalAlpha=1;
-    }
-  });
-
-  // Find exit hint
-  if(mapAt(Math.floor(player.x+Math.cos(player.angle)), Math.floor(player.y+Math.sin(player.angle)))===3||
-     mapAt(player.x,player.y)===3){
-    X.font='bold 6px monospace';X.textAlign='center';
-    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-26,RH/2+10,52,10);
-    X.fillStyle='#44ff88';X.fillText('EXIT!',RW/2,RH/2+18);
-  }
-}
-
-// ── VHS / PS1 noise overlay ───────────────────────────────────
-function drawVHS(){
-  // Scanlines
-  for(let y=0;y<RH;y+=2){
-    X.fillStyle='rgba(0,0,0,.08)';X.fillRect(0,y,RW,1);
-  }
-  // Chromatic aberration strip (rare)
-  if(Math.random()<0.04){
-    const sy=Math.floor(Math.random()*RH);
-    X.globalAlpha=0.15;
-    X.fillStyle='rgba(255,0,0,.5)';X.fillRect(0,sy,RW,1);
-    X.fillStyle='rgba(0,0,255,.5)';X.fillRect(2,sy,RW,1);
-    X.globalAlpha=1;
-  }
-  // Occasional full noise line
-  if(Math.random()<0.02){
-    const sy=Math.floor(Math.random()*RH);
-    X.fillStyle=`rgba(255,255,255,${Math.random()*.08})`;
-    X.fillRect(0,sy,RW,1);
-  }
-}
-
-// ── Screens ───────────────────────────────────────────────────
-function drawTitle(){
-  // Solid dark background — no VHS noise here so text is legible
-  X.fillStyle='#060408';X.fillRect(0,0,RW,RH);
-
-  // Subtle top-to-bottom vignette
-  const vg=X.createLinearGradient(0,0,0,RH);
-  vg.addColorStop(0,'rgba(0,0,0,.55)');
-  vg.addColorStop(0.4,'rgba(0,0,0,0)');
-  vg.addColorStop(1,'rgba(0,0,0,.7)');
-  X.fillStyle=vg; X.fillRect(0,0,RW,RH);
-
-  // ── Title ──────────────────────────────────────────────────
-  X.textAlign='center';
-
-  // Shadow pass
-  X.font='bold 11px monospace';
-  X.fillStyle='rgba(0,0,0,.8)';
-  X.fillText('HILYARD STREET',RW/2+2,34);
-  X.font='bold 16px monospace';
-  X.fillText('HOSPITAL',RW/2+2,54);
-
-  // Main title — bright red, readable
-  X.font='bold 11px monospace';
-  X.fillStyle='#dd2222';
-  X.fillText('HILYARD STREET',RW/2,32);
-  X.font='bold 16px monospace';
-  X.fillStyle='#ff3333';
-  X.fillText('HOSPITAL',RW/2,52);
-
-  // Blood drips
-  for(let d=0;d<5;d++){
-    const dx=RW/2-22+d*11, len=6+d*5+(d%2)*4;
-    X.fillStyle='#cc0000';X.fillRect(dx,52,2,len);
-    X.fillStyle='#990000';
-    X.beginPath();X.arc(dx+1,52+len,2.5,0,Math.PI*2);X.fill();
-  }
-
-  // ── Byline ─────────────────────────────────────────────────
-  X.font='6px monospace';
-  X.fillStyle='#cc8866';
-  X.fillText('by Ty Alami',RW/2,74);
-
-  X.font='bold 6px monospace';
-  X.fillStyle='#aa4444';
-  X.fillText('A SURVIVAL HORROR EXPERIENCE',RW/2,86);
-
-  // Divider
-  X.fillStyle='#441111';
-  X.fillRect(RW/2-40,92,80,1);
-
-  // ── Story text — bright enough to read ─────────────────────
-  X.font='6px monospace';
-  const story=[
-    'The hospital has been dark for three days.',
-    'You went in to look for your sister.',
-    'Something found you first.',
-  ];
-  story.forEach((t,i)=>{
-    X.fillStyle='#bbaa99';
-    X.fillText(t,RW/2,102+i*12);
-  });
-
-  // Divider
-  X.fillStyle='#441111';
-  X.fillRect(RW/2-40,140,80,1);
-
-  // ── Controls — clean and readable ──────────────────────────
-  X.font='5px monospace';
-  X.fillStyle='#8899bb';
-  X.fillText('W A S D  /  drag  —  Move & Turn',RW/2,150);
-  X.fillText('Click  /  tap right  —  Shoot',RW/2,161);
-  X.fillText('Walk over items to pick them up',RW/2,172);
-
-  // ── Pulse prompt ───────────────────────────────────────────
-  const pu=(Math.sin(Date.now()/500)+1)/2;
-  X.globalAlpha=.55+pu*.45;
-  X.font='bold 7px monospace';
-  X.fillStyle='#ffcc44';
-  X.fillText('▶  CLICK OR PRESS ENTER TO BEGIN  ◀',RW/2,190);
-  X.globalAlpha=1;
-
-  // Just a single subtle scanline pass — no heavy VHS noise
-  X.fillStyle='rgba(0,0,0,0.06)';
-  for(let y=0;y<RH;y+=2)X.fillRect(0,y,RW,1);
-}
-
-function drawDead(){
-  X.fillStyle='#0a0000';X.fillRect(0,0,RW,RH);
-  for(let i=0;i<8;i++){
-    X.fillStyle=`rgba(${80+i*10},0,0,.${i+1})`;
-    X.fillRect(i,i,RW-i*2,RH-i*2);
-  }
-  X.font='bold 16px monospace';X.textAlign='center';
-  X.fillStyle='#440000';X.fillText('YOU DIED',RW/2+1,RH/2-8);
-  X.fillStyle='#cc1111';X.fillText('YOU DIED',RW/2,RH/2-10);
-  const pu=(Math.sin(Date.now()/600)+1)/2;
-  X.globalAlpha=.35+pu*.6;
-  X.fillStyle='#883333';X.font='bold 5px monospace';
-  X.fillText('CLICK TO TRY AGAIN',RW/2,RH/2+20);
-  X.globalAlpha=1;
-  drawVHS();
-}
-
-function drawWin(){
-  X.fillStyle='#000a04';X.fillRect(0,0,RW,RH);
-  X.font='bold 12px monospace';X.textAlign='center';
-  X.fillStyle='#004422';X.fillText('YOU ESCAPED',RW/2+1,RH/2-8);
-  X.fillStyle='#22cc66';X.fillText('YOU ESCAPED',RW/2,RH/2-10);
-  X.font='5px monospace';X.fillStyle='#336644';
-  X.fillText('You made it out of Hilyard Street.',RW/2,RH/2+8);
-  X.fillText('You never found your sister.',RW/2,RH/2+18);
-  X.fillStyle='#ffdd44';X.fillText(`Score: ${score}  Kills: ${kills}/4`,RW/2,RH/2+22);
-  const pu=(Math.sin(Date.now()/600)+1)/2;
-  X.globalAlpha=.35+pu*.6;
-  X.fillStyle='#448855';X.font='bold 5px monospace';
-  X.fillText('CLICK TO PLAY AGAIN',RW/2,RH/2+24);
-  X.globalAlpha=1;
-  drawVHS();
-}
-
-// ── On-screen mobile controls ─────────────────────────────────
-function drawMobileControls(){
-  // Left zone — joystick ring
-  const jx=38, jy=RH-36;
-  X.strokeStyle='rgba(255,255,255,.18)';X.lineWidth=1;
-  X.beginPath();X.arc(jx,jy,22,0,Math.PI*2);X.stroke();
-  if(joystick.active){
-    const dx=Math.max(-18,Math.min(18,joystick.cx-joystick.sx));
-    const dy=Math.max(-18,Math.min(18,joystick.cy-joystick.sy));
-    X.fillStyle='rgba(255,255,255,.28)';
-    X.beginPath();X.arc(jx+dx,jy+dy,10,0,Math.PI*2);X.fill();
-  } else {
-    X.fillStyle='rgba(255,255,255,.1)';
-    X.beginPath();X.arc(jx,jy,10,0,Math.PI*2);X.fill();
-  }
-  X.fillStyle='rgba(255,255,255,.22)';X.font='6px monospace';X.textAlign='center';
-  X.fillText('▲',jx,jy-14);X.fillText('▼',jx,jy+20);
-  X.fillText('◀',jx-16,jy+3);X.fillText('▶',jx+16,jy+3);
-
-  // Right zone — attack button
-  const ax=RW-28, ay=RH-26;
-  X.fillStyle=atkBtn.active?'rgba(180,40,40,.6)':'rgba(140,20,20,.35)';
-  X.beginPath();X.arc(ax,ay,18,0,Math.PI*2);X.fill();
-  X.strokeStyle='rgba(255,80,80,.45)';X.lineWidth=1.5;
-  X.beginPath();X.arc(ax,ay,18,0,Math.PI*2);X.stroke();
-  X.font='bold 6px monospace';X.textAlign='center';X.fillStyle='rgba(255,180,180,.85)';
-  X.fillText('HIT',ax,ay+2);
-
-  // Subtle zone divider
-  X.strokeStyle='rgba(255,255,255,.05)';X.lineWidth=1;X.setLineDash([3,4]);
-  X.beginPath();X.moveTo(RW/2,RH-55);X.lineTo(RW/2,RH);X.stroke();
-  X.setLineDash([]);
-}
-
-// ── Intro narrative overlay ───────────────────────────────────
-function drawIntro(){
-  X.fillStyle='rgba(0,0,0,.82)';X.fillRect(0,0,RW,RH);
-  const lv=LEVELS[currentLevel];
-  const lines=[
-    {t:'You open your eyes.',          c:'#ccbbaa',s:'6px monospace',      y:26},
-    {t:`LEVEL ${currentLevel+1}`,       c:'#ffdd44',s:'bold 12px monospace',y:44},
-    {t:lv.name,                         c:'#cc8844',s:'bold 8px monospace', y:58},
-    {t:'────────────',                  c:'#332211',s:'6px monospace',      y:70},
-    {t:`${lv.enemyDefs.length} creatures patrol these halls.`,
-                                        c:'#cc6644',s:'bold 6px monospace', y:84},
-    {t:'Find the KEY. Unlock the door.',c:'#ccaa66',s:'6px monospace',      y:98},
-    {t:'Reach the EXIT.',               c:'#ccaa66',s:'6px monospace',      y:110},
-    {t:'────────────',                  c:'#332211',s:'6px monospace',      y:122},
-    {t:'DRAG LEFT  →  Move & Turn',     c:'#7799bb',s:'6px monospace',      y:147},
-    {t:'TAP RIGHT  →  Shoot',           c:'#7799bb',s:'6px monospace',      y:159},
-    {t:'Walk over items to pick up',    c:'#7799bb',s:'6px monospace',      y:171},
-  ];
-  lines.forEach(l=>{X.font=l.s;X.textAlign='center';X.fillStyle=l.c;X.fillText(l.t,RW/2,l.y);});
-  const pu=(Math.sin(Date.now()/500)+1)/2;
-  X.globalAlpha=.4+pu*.55;
-  X.font='bold 6px monospace';X.fillStyle='#997755';X.textAlign='center';
-  X.fillText('▶  TAP or SPACE to begin  ◀',RW/2,182);
-  X.globalAlpha=1;
-}
-
-function drawPause(){
-  X.fillStyle='rgba(0,0,0,.7)';X.fillRect(0,0,RW,RH);
-  X.font='bold 10px monospace';X.textAlign='center';
-  X.fillStyle='#aa8866';X.fillText('PAUSED',RW/2,RH/2-4);
-  X.font='5px monospace';X.fillStyle='#665544';
-  X.fillText('P to resume',RW/2,RH/2+10);
-}
-
-requestAnimationFrame(ts=>{lt=ts;requestAnimationFrame(loop);});
-</script>
-</body>
-</html>
-  E            Pick up item
-  P            Pause
-  CLICK        Attack (mouse)
-  TOUCH        Virtual joystick (mobile)
-*/
-
-// ── Canvas setup ──────────────────────────────────────────────
-const C=document.getElementById('gc');
-const X=C.getContext('2d');
-// PS1 low-res render buffer — intentionally low resolution
-const RW=320, RH=200;
-C.width=RW; C.height=RH;
-// Display size
-function resize(){
-  const wr=window.innerWidth, wh=window.innerHeight-C.parentElement.offsetTop-4;
-  const scale=Math.min(wr/RW, wh/RH);
-  C.style.width=Math.floor(RW*scale)+'px';
-  C.style.height=Math.floor(RH*scale)+'px';
-}
-resize();
-window.addEventListener('resize',resize);
-X.imageSmoothingEnabled=false;
-
-// ── Level definitions ─────────────────────────────────────────
-// map cells: 1=wall 0=floor 2=locked door 3=exit 4=key 5=health
-const MAPW=24,MAPH=18;
-const LEVELS=[
-  { // ─ LEVEL 0: INTAKE WARD ─ L-shape corridor ─
-    name:'INTAKE WARD',
-    map:[
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,0,4,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    ],
-    playerStart:{x:1.5,y:1.5,angle:0},
-    lights:[{x:6,y:2},{x:16,y:2},{x:21,y:7},{x:16,y:7},{x:21,y:13},{x:6,y:15}],
-    enemyDefs:[
-      {x:8.5, y:1.5, health:2,state:'patrol',patrolAngle:0},         // row 1 corridor, near start
-      {x:18.5,y:1.5, health:2,state:'patrol',patrolAngle:Math.PI},   // row 1 corridor, far end
-      {x:6.5,  y:3.5, health:2,state:'patrol',patrolAngle:Math.PI},  // row 3 corridor
-      {x:16.5, y:3.5, health:2,state:'idle',  patrolAngle:0},        // row 3 corridor, far end
-      {x:19.5, y:7.5, health:2,state:'patrol',patrolAngle:Math.PI*1.5}, // side arm with key
-    ],
-    itemDefs:[
-      {type:'key',   x:14.5,y:7.5},
-      {type:'health',x:21.5,y:5.5},
-      {type:'health',x:6.5, y:3.5},
-    ],
-  },
-  { // ─ LEVEL 1: SURGERY WING ─ wide centre room ─
-    name:'SURGERY WING',
-    map:[
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,0,4,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,2,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    ],
-    playerStart:{x:1.5,y:1.5,angle:0},
-    lights:[{x:8,y:2},{x:18,y:2},{x:21,y:6},{x:15,y:9},{x:4,y:12},{x:2,y:14}],
-    enemyDefs:[
-      {x:10.5,y:2.5, health:2,state:'patrol',patrolAngle:0},
-      {x:21.5,y:6.5, health:2,state:'patrol',patrolAngle:Math.PI},
-      {x:14.5,y:9.5, health:3,state:'idle',  patrolAngle:Math.PI/2},
-      {x:4.5, y:3.5, health:2,state:'patrol',patrolAngle:Math.PI*1.5},
-      {x:18.5,y:3.5, health:2,state:'patrol',patrolAngle:Math.PI},
-      {x:3.5, y:12.5,health:3,state:'idle',  patrolAngle:0},
-    ],
-    itemDefs:[
-      {type:'key',   x:12.5,y:9.5},
-      {type:'health',x:21.5,y:5.5},
-      {type:'health',x:4.5, y:12.5},
-    ],
-  },
-  { // ─ LEVEL 2: THE BASEMENT ─ two descents, tight chokepoints ─
-    name:'THE BASEMENT',
-    map:[
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
-      [1,1,0,0,1,0,4,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
-      [1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
-      [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    ],
-    playerStart:{x:1.5,y:1.5,angle:0},
-    lights:[{x:10,y:2},{x:3,y:6},{x:10,y:6},{x:21,y:7},{x:21,y:12},{x:8,y:15}],
-    enemyDefs:[
-      {x:6.5, y:2.5, health:2,state:'patrol',patrolAngle:0},
-      {x:3.5, y:6.5, health:3,state:'idle',  patrolAngle:Math.PI},
-      {x:10.5,y:6.5, health:3,state:'patrol',patrolAngle:Math.PI/2},
-      {x:21.5,y:11.5,health:3,state:'patrol',patrolAngle:Math.PI*1.5},
-      {x:14.5,y:2.5, health:2,state:'patrol',patrolAngle:Math.PI},
-      {x:20.5,y:5.5, health:3,state:'idle',  patrolAngle:Math.PI*0.5},
-      {x:3.5, y:15.5,health:3,state:'patrol',patrolAngle:0},
-    ],
-    itemDefs:[
-      {type:'key',   x:6.5, y:6.5},
-      {type:'health',x:10.5,y:7.5},
-      {type:'health',x:21.5,y:5.5},
-      {type:'health',x:10.5,y:2.5},
-    ],
-  },
-];
-
-let currentLevel=0;
-let MAP=LEVELS[0].map.map(r=>[...r]);
-
-function mapAt(x,y){
-  const mx=Math.floor(x),my=Math.floor(y);
-  if(mx<0||mx>=MAPW||my<0||my>=MAPH)return 1;
-  return MAP[my][mx];
-}
-function isWall(x,y){const c=mapAt(x,y);return c===1||c===2;}
-
-// Wall texture colours
-const WALL_COLS=[
-  null,
-  // 1 = grimy hospital tile — dirty green-grey
-  {light:'#6a7a68',dark:'#3a4a38',ns:'#52625e',ew:'#323e30'},
-  // 2 = locked door — dark rust metal
-  {light:'#663a1a',dark:'#3a1a08',ns:'#4a2810',ew:'#2e1808'},
-  // 3 = exit — faint sickly green glow
-  {light:'#1a9a3a',dark:'#0e5a22',ns:'#148030',ew:'#0a4818'},
-];
-
-let LIGHT_SOURCES=LEVELS[0].lights;
-let lightFlicker=LIGHT_SOURCES.map(()=>1.0);
-
-// ── Player ────────────────────────────────────────────────────
-const player={
-  x:1.5, y:1.5,
-  angle:0,
-  speed:0, turnSpeed:0,
-  health:100, maxHealth:100,
-  hasKey:false,
-  stamina:100,
-};
-const MOVE_SPD=0.09;
-const TURN_SPD=0.072;
-const FOV=Math.PI/3;
-const HALF_FOV=FOV/2;
-const RAYS=RW;
-
-// these are populated by loadLevel()
-let items=[];
-let enemies=[];
-let bloodDecals=[];  // world-space blood puddles {wx,wy,r,a}
-const ENEMY_SPD=0.022;
-const ENEMY_SIGHT=7;
-const ENEMY_ATK_RANGE=0.85;
-const ENEMY_ATK_CD=1.8; // seconds between attacks
-let enemyAtkTimers=enemies.map(()=>0);
-
-// ── Weapon bob ────────────────────────────────────────────────
-let weaponBobT=0;
-let weaponBobAmt=0;
-let weaponKick=0;
-let weaponSway=0;
-
-// ── Camera head bob ───────────────────────────────────────────
-let camBobT=0, camBobAmt=0;
-
-// ── Screen shake ──────────────────────────────────────────────
-let shakeMag=0, shakeX=0, shakeY=0;
-
-// ── Blood splats ──────────────────────────────────────────────
-let bloodSplats=[];  // {x,y,r,a} screen-space splats that fade
-
-let flashlight={battery:100, on:true, flicker:0};
-const FLASH_DRAIN=0.003;
-
-// ── Raycaster ─────────────────────────────────────────────────
-// Returns array of {dist, wallType, side, wallX} per column
-function castRays(){
-  const results=[];
-  for(let col=0;col<RAYS;col++){
-    const rayAngle=player.angle - HALF_FOV + (col/RAYS)*FOV;
-    const rdx=Math.cos(rayAngle), rdy=Math.sin(rayAngle);
-    let mapX=Math.floor(player.x), mapY=Math.floor(player.y);
-    // DDA
-    const deltaX=Math.abs(1/rdx)||1e30, deltaY=Math.abs(1/rdy)||1e30;
-    let stepX,stepY,sideDistX,sideDistY;
-    if(rdx<0){stepX=-1;sideDistX=(player.x-mapX)*deltaX;}
-    else{stepX=1;sideDistX=(mapX+1-player.x)*deltaX;}
-    if(rdy<0){stepY=-1;sideDistY=(player.y-mapY)*deltaY;}
-    else{stepY=1;sideDistY=(mapY+1-player.y)*deltaY;}
-    let hit=false,side=0,wallType=1;
-    for(let i=0;i<64&&!hit;i++){
-      if(sideDistX<sideDistY){sideDistX+=deltaX;mapX+=stepX;side=0;}
-      else{sideDistY+=deltaY;mapY+=stepY;side=1;}
-      const c=mapAt(mapX,mapY);
-      if(c>=1&&c<=3){hit=true;wallType=c;}
-    }
-    let dist;
-    if(side===0) dist=sideDistX-deltaX;
-    else         dist=sideDistY-deltaY;
-    // Wall X coordinate (for texture variation)
-    let wallX;
-    if(side===0) wallX=(player.y+dist*rdy)-Math.floor(player.y+dist*rdy);
-    else         wallX=(player.x+dist*rdx)-Math.floor(player.x+dist*rdx);
-    results.push({dist:Math.max(0.01,dist),wallType,side,wallX});
-  }
-  return results;
-}
-
-// ── Sprite projection ─────────────────────────────────────────
-function projectSprite(sx,sy){
-  const dx=sx-player.x, dy=sy-player.y;
-  // Rotate into camera space
-  const invDet=1/(Math.cos(player.angle)*Math.sin(player.angle+Math.PI/2)-
-                   Math.sin(player.angle)*Math.cos(player.angle+Math.PI/2));
-  // Simpler: use angle difference
-  const spriteDist=Math.hypot(dx,dy);
-  const spriteAngle=Math.atan2(dy,dx)-player.angle;
-  // Normalise angle
-  let a=spriteAngle;
-  while(a>Math.PI)a-=Math.PI*2;
-  while(a<-Math.PI)a+=Math.PI*2;
-  if(Math.abs(a)>HALF_FOV*1.5)return null;
-  const screenX=Math.floor((0.5+a/FOV)*RW);
-  const h=Math.floor(RH/spriteDist);
-  return{screenX,dist:spriteDist,h,a};
-}
-
-// ── Zbuffer ───────────────────────────────────────────────────
-let zBuf=new Float32Array(RAYS);
-
-// ── States ────────────────────────────────────────────────────
-const S={TITLE:0,INTRO:5,PLAY:1,PAUSE:2,DEAD:3,WIN:4};
-let state=S.TITLE;
-let introTimer=0;
-
-// ── Input ─────────────────────────────────────────────────────
-const K={};
-addEventListener('keydown',e=>{
-  K[e.code]=true;
-  if(e.code==='KeyP'){togglePause();e.preventDefault();}
-  if(e.code==='Space'&&state===S.PLAY){doAttack();e.preventDefault();}
-  if(e.code==='KeyE'&&state===S.PLAY){tryPickup();}
-  if((e.code==='Space'||e.code==='Enter')&&(state===S.TITLE||state===S.DEAD||state===S.WIN)){startGame();}
-  if((e.code==='Space'||e.code==='Enter')&&state===S.INTRO){state=S.PLAY;}
-  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
-});
-addEventListener('keyup',e=>K[e.code]=false);
-C.addEventListener('click',e=>{
-  if(state===S.TITLE||state===S.DEAD||state===S.WIN){startGame();return;}
-  if(state===S.INTRO){state=S.PLAY;return;}
-  if(state===S.PLAY)doAttack();
-});
-
-// ── Dual-zone touch controls ──────────────────────────────────
-// Left half  = joystick (move + turn)
-// Right half = attack button
-const touches={};  // id -> {sx,sy,cx,cy,side}
-let joystick={active:false,sx:0,sy:0,cx:0,cy:0};
-let atkBtn={active:false};
-
-function canvasPos(touch){
-  const rect=C.getBoundingClientRect();
-  const scale=RW/rect.width;
-  return{x:(touch.clientX-rect.left)*scale, y:(touch.clientY-rect.top)*scale};
-}
-
-C.addEventListener('touchstart',e=>{
-  e.preventDefault();
-  // If 2+ fingers — user is pinching/zooming, never start game or move
-  if(e.touches.length>=2)return;
-  if(state===S.TITLE||state===S.DEAD||state===S.WIN){startGame();return;}
-  if(state===S.INTRO){state=S.PLAY;return;}
-  if(state!==S.PLAY)return;
-  for(const t of e.changedTouches){
-    const p=canvasPos(t);
-    const side=p.x<RW/2?'left':'right';
-    touches[t.identifier]={...p,sx:p.x,sy:p.y,side};
-    if(side==='left'){joystick={active:true,sx:p.x,sy:p.y,cx:p.x,cy:p.y};}
-    else{atkBtn.active=true;}
-  }
-},{passive:false});
-
-C.addEventListener('touchmove',e=>{
-  e.preventDefault();
-  if(e.touches.length>=2)return; // ignore pinch moves
-  for(const t of e.changedTouches){
-    const p=canvasPos(t);
-    const td=touches[t.identifier];
-    if(!td)continue;
-    td.cx=p.x;td.cy=p.y;
-    if(td.side==='left'){joystick.cx=p.x;joystick.cy=p.y;}
-  }
-},{passive:false});
-
-C.addEventListener('touchend',e=>{
-  e.preventDefault();
-  for(const t of e.changedTouches){
-    const td=touches[t.identifier];
-    if(!td)continue;
-    if(td.side==='right'){
-      doAttack();
-      atkBtn.active=false;
-    }
-    if(td.side==='left'){joystick.active=false;}
-    delete touches[t.identifier];
-  }
-},{passive:false});
-
-// ── Game logic ────────────────────────────────────────────────
-let attackFlash=0, damageFlash=0, hurtTimer=0;
-let gameTime=0, score=0, kills=0;
-
-function loadLevel(n){
-  const lv=LEVELS[n];
-  MAP=lv.map.map(r=>[...r]);
-  LIGHT_SOURCES=lv.lights;
-  lightFlicker=LIGHT_SOURCES.map(()=>1.0);
-  player.x=lv.playerStart.x; player.y=lv.playerStart.y; player.angle=lv.playerStart.angle;
-  player.health=Math.min(player.maxHealth,player.health||100); player.hasKey=false;
-  items=lv.itemDefs.map(it=>({...it,alive:true}));
-  enemies=lv.enemyDefs.map(e=>({
-    x:e.x,y:e.y,angle:e.patrolAngle,
-    state:e.state,health:e.health,
-    alertTimer:0,hitFlash:0,patrolAngle:e.patrolAngle,
-    deathTimer:0
-  }));
-  enemyAtkTimers=enemies.map(()=>0);
-  kills=0; msgTimer=0;
-  bloodDecals=[];
-}
-
-// ── Audio engine ─────────────────────────────────────────────
-let audioCtx=null, masterGain=null;
-let droneNode=null, droneGain=null;
-let dripTimer=0, groanTimer=0;
-
-function initAudio(){
-  if(audioCtx)return;
-  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  masterGain=audioCtx.createGain();
-  masterGain.gain.value=0.7;
-  masterGain.connect(audioCtx.destination);
-  startDrone();
-}
-
-// Deep rumbling ambient drone — layered detuned oscillators through heavy lowpass
-function startDrone(){
-  if(!audioCtx||droneNode)return;
-  const gain=audioCtx.createGain();
-  gain.gain.setValueAtTime(0,audioCtx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.08,audioCtx.currentTime+3);
-  gain.connect(masterGain);
-  droneGain=gain;
-
-  // Two detuned subs for that low rumble
-  [38,41].forEach((freq,i)=>{
-    const osc=audioCtx.createOscillator();
-    const lp=audioCtx.createBiquadFilter();
-    lp.type='lowpass'; lp.frequency.value=90; lp.Q.value=0.5;
-    osc.type='sawtooth';
-    osc.frequency.value=freq;
-    // Slow LFO wobble
-    const lfo=audioCtx.createOscillator();
-    const lfoGain=audioCtx.createGain();
-    lfo.frequency.value=0.07+i*0.03;
-    lfoGain.gain.value=1.2;
-    lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
-    lfo.start();
-    osc.connect(lp); lp.connect(gain);
-    osc.start();
-  });
-
-  // High faint hiss — distant ventilation
-  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate);
-  const d=buf.getChannelData(0);
-  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.15;
-  const src=audioCtx.createBufferSource();
-  src.buffer=buf; src.loop=true;
-  const hp=audioCtx.createBiquadFilter();
-  hp.type='bandpass'; hp.frequency.value=1800; hp.Q.value=0.4;
-  const hg=audioCtx.createGain(); hg.gain.value=0.06;
-  src.connect(hp); hp.connect(hg); hg.connect(masterGain);
-  src.start();
-}
-
-// Single water drip — synthesised from pitched noise burst + reverb tail
-function playDrip(){
-  if(!audioCtx)return;
-  const t=audioCtx.currentTime;
-  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*0.18,audioCtx.sampleRate);
-  const d=buf.getChannelData(0);
-  // Short noise burst that decays
-  for(let i=0;i<d.length;i++){
-    const env=Math.exp(-i/(audioCtx.sampleRate*0.03));
-    d[i]=(Math.random()*2-1)*env;
-  }
-  const src=audioCtx.createBufferSource();
-  src.buffer=buf;
-  const bp=audioCtx.createBiquadFilter();
-  bp.type='bandpass';
-  // Randomise pitch for variety — 400–900 Hz
-  bp.frequency.value=400+Math.random()*500;
-  bp.Q.value=18;
-  const g=audioCtx.createGain(); g.gain.value=0.55;
-  src.connect(bp); bp.connect(g); g.connect(masterGain);
-  src.start(t);
-
-  // Short reverb tail — echo drip off concrete wall
-  const tail=audioCtx.createBuffer(1,audioCtx.sampleRate*0.4,audioCtx.sampleRate);
-  const td=tail.getChannelData(0);
-  for(let i=0;i<td.length;i++) td[i]=(Math.random()*2-1)*Math.exp(-i/(audioCtx.sampleRate*0.08))*0.25;
-  const ts=audioCtx.createBufferSource(); ts.buffer=tail;
-  const tg=audioCtx.createGain(); tg.gain.value=0.3;
-  const delay=audioCtx.createDelay(); delay.delayTime.value=0.06+Math.random()*0.12;
-  ts.connect(delay); delay.connect(tg); tg.connect(masterGain);
-  ts.start(t+0.05);
-}
-
-// Gunshot — sharp crack through distortion
-function playGunshot(){
-  if(!audioCtx)return;
-  const t=audioCtx.currentTime;
-  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*0.25,audioCtx.sampleRate);
-  const d=buf.getChannelData(0);
-  for(let i=0;i<d.length;i++){
-    const env=i<200?i/200:Math.exp(-(i-200)/(audioCtx.sampleRate*0.06));
-    d[i]=(Math.random()*2-1)*env;
-  }
-  const src=audioCtx.createBufferSource(); src.buffer=buf;
-  const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2200;
-  const g=audioCtx.createGain(); g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.22);
-  // Silencer effect — softer high end, punch the mids
-  const mid=audioCtx.createBiquadFilter(); mid.type='peaking'; mid.frequency.value=800; mid.gain.value=8;
-  src.connect(lp); lp.connect(mid); mid.connect(g); g.connect(masterGain);
-  src.start(t);
-}
-
-// Enemy growl — pitched noise burst when chasing
-function playGrowl(){
-  if(!audioCtx)return;
-  const t=audioCtx.currentTime;
-  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*0.35,audioCtx.sampleRate);
-  const d=buf.getChannelData(0);
-  const pitch=80+Math.random()*40;
-  for(let i=0;i<d.length;i++){
-    const env=Math.exp(-i/(audioCtx.sampleRate*0.12));
-    d[i]=Math.sin(i/audioCtx.sampleRate*pitch*Math.PI*2)*0.5*(Math.random()*0.5+0.5)*env;
-  }
-  const src=audioCtx.createBufferSource(); src.buffer=buf;
-  const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=600;
-  const g=audioCtx.createGain(); g.gain.value=0.5;
-  src.connect(lp); lp.connect(g); g.connect(masterGain);
-  src.start(t);
-}
-
-// Player hurt — sharp distorted thud
-function playHurt(){
-  if(!audioCtx)return;
-  const t=audioCtx.currentTime;
-  const osc=audioCtx.createOscillator();
-  osc.type='sawtooth'; osc.frequency.setValueAtTime(180,t); osc.frequency.exponentialRampToValueAtTime(40,t+0.15);
-  const g=audioCtx.createGain(); g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
-  const dist=audioCtx.createWaveShaper();
-  const curve=new Float32Array(256);
-  for(let i=0;i<256;i++){const x=i*2/255-1; curve[i]=Math.tanh(x*5);}
-  dist.curve=curve;
-  osc.connect(dist); dist.connect(g); g.connect(masterGain);
-  osc.start(t); osc.stop(t+0.2);
-}
-
-// Item pickup chime — two-tone metallic
-function playPickup(){
-  if(!audioCtx)return;
-  const t=audioCtx.currentTime;
-  [880,1320].forEach((freq,i)=>{
-    const osc=audioCtx.createOscillator();
-    osc.type='sine'; osc.frequency.value=freq;
-    const g=audioCtx.createGain();
-    g.gain.setValueAtTime(0,t+i*0.08);
-    g.gain.linearRampToValueAtTime(0.18,t+i*0.08+0.01);
-    g.gain.exponentialRampToValueAtTime(0.001,t+i*0.08+0.4);
-    osc.connect(g); g.connect(masterGain);
-    osc.start(t+i*0.08); osc.stop(t+i*0.08+0.45);
-  });
-}
-
-// Modulate drone intensity by nearest enemy
-function updateDroneIntensity(){
-  if(!droneGain||!audioCtx)return;
-  const nearest=enemies.reduce((mn,e)=>{
-    if(e.state==='dead')return mn;
-    return Math.min(mn,Math.hypot(e.x-player.x,e.y-player.y));
-  },20);
-  const threat=Math.max(0,1-nearest/8);
-  const target=0.06+threat*0.14;
-  droneGain.gain.setTargetAtTime(target,audioCtx.currentTime,0.8);
-}
-
-function startGame(){
-  initAudio();
-  currentLevel=0;
-  player.health=100;
-  score=0; kills=0;
-  flashlight.battery=100; flashlight.on=true; flashlight.flicker=0;
-  attackFlash=0; damageFlash=0; hurtTimer=0; gameTime=0;
-  shakeMag=0; shakeX=0; shakeY=0; bloodSplats=[];
-  camBobT=0; camBobAmt=0; weaponBobT=0; weaponBobAmt=0; weaponKick=0; weaponSway=0;
-  joystick={active:false,sx:0,sy:0,cx:0,cy:0};
-  atkBtn={active:false};
-  loadLevel(0);
-  introTimer=0;
-  state=S.INTRO;
-}
-
-function togglePause(){
-  if(state===S.PLAY)state=S.PAUSE;
-  else if(state===S.PAUSE)state=S.PLAY;
-}
-
-function doAttack(){
-  if(state!==S.PLAY)return;
-  attackFlash=8;
-  weaponKick=9;
-  playGunshot();  // kick gun upward on fire
-  // Check if any enemy is in front within range
-  enemies.forEach((e,i)=>{
-    if(e.health<=0)return;
-    const dx=e.x-player.x, dy=e.y-player.y;
-    const dist=Math.hypot(dx,dy);
-    if(dist>12)return;  // effective pistol range
-    const ang=Math.atan2(dy,dx)-player.angle;
-    let a=ang;while(a>Math.PI)a-=Math.PI*2;while(a<-Math.PI)a+=Math.PI*2;
-    if(Math.abs(a)>FOV/2)return;  // outside FOV
-    if(!hasLOS(player.x,player.y,e.x,e.y))return;  // wall in the way
-      e.health--;
-      e.hitFlash=14;
-      e.state='chase';
-      // World-space blood puddle where enemy stands
-      for(let b=0;b<4;b++) bloodDecals.push({
-        wx:e.x+(Math.random()-.5)*0.6,
-        wy:e.y+(Math.random()-.5)*0.6,
-        r:0.2+Math.random()*0.3, a:1.0
-      });
-      // Screen splatter
-      for(let b=0;b<5;b++) bloodSplats.push({
-        x:RW/2+(Math.random()-.5)*55, y:RH/2+(Math.random()-.5)*35,
-        r:2+Math.random()*7, a:0.65+Math.random()*.3
-      });
-      if(e.health<=0){e.state='dead';kills++;score+=100;showMsg('+100  ENEMY DOWN');}
-  });
-}
-
-function tryPickup(){
-  items.forEach(it=>{
-    if(!it.alive)return;
-    if(Math.hypot(it.x-player.x,it.y-player.y)>1.0)return;
-    if(it.type==='key'){player.hasKey=true;it.alive=false;showMsg('KEY OBTAINED');playPickup();}
-    if(it.type==='health'){player.health=Math.min(player.maxHealth,player.health+30);it.alive=false;showMsg('+30 HEALTH');playPickup();}
-  });
-}
-
-let msgText='',msgTimer=0;
-function showMsg(t){msgText=t;msgTimer=2.5;}
-
-// ── Main loop ─────────────────────────────────────────────────
-let lt=0,dt=0;
-function loop(ts){
-  dt=Math.min((ts-lt)/1000,.05);lt=ts;
-  if(state===S.PLAY||state===S.INTRO){
-    gameTime+=dt;
-    if(state===S.PLAY){
-      handleMovement();
-      updateFlashlight();
-      updateEnemies();
-      tryPickup(); // auto-pickup on proximity — no button needed
-      if(attackFlash>0)attackFlash--;
-      if(damageFlash>0)damageFlash--;
-      if(msgTimer>0)msgTimer-=dt;
-      shakeMag=Math.max(0,shakeMag-dt*22);
-      shakeX=(Math.random()-.5)*shakeMag*2;
-      shakeY=(Math.random()-.5)*shakeMag*2;
-      bloodSplats=bloodSplats.filter(b=>(b.a-=dt*0.35,b.a>0));
-      bloodDecals=bloodDecals.filter(b=>(b.a-=dt*0.04,b.a>0.05));
-      // ── Audio updates ──
-      dripTimer-=dt;
-      if(dripTimer<=0){
-        playDrip();
-        dripTimer=2.5+Math.random()*6; // drip every 2.5–8.5 seconds
-      }
-      groanTimer-=dt;
-      if(groanTimer<=0){
-        // Distant groan only when an enemy is chasing
-        const anyChasing=enemies.some(e=>e.state==='chase');
-        if(anyChasing)playGrowl();
-        groanTimer=6+Math.random()*10;
-      }
-      updateDroneIntensity();
-      lightFlicker=lightFlicker.map(v=>{
-        if(Math.random()<0.025)return Math.random()<0.12?0.15:0.8+Math.random()*.2;
-        return v+(1.0-v)*0.1;
-      });
-      if(mapAt(player.x,player.y)===3){
-        score+=500;
-        if(currentLevel<LEVELS.length-1){
-          currentLevel++;
-          loadLevel(currentLevel);
-          showMsg(`LEVEL ${currentLevel+1}: ${LEVELS[currentLevel].name}`);
-        } else {
-          state=S.WIN;
-        }
-      }
-    }
-  }
-  render();
-  requestAnimationFrame(loop);
-}
-
-function handleMovement(){
-  let fw=0,turn=0;
-  // Keyboard
-  if(K['KeyW']||K['ArrowUp'])fw=1;
-  if(K['KeyS']||K['ArrowDown'])fw=-1;
-  if(K['KeyA']||K['ArrowLeft'])turn=-1;
-  if(K['KeyD']||K['ArrowRight'])turn=1;
-  // Left joystick
-  if(joystick.active){
-    const dx=joystick.cx-joystick.sx, dy=joystick.cy-joystick.sy;
-    const d=Math.hypot(dx,dy);
-    if(d>6){
-      fw=-dy/Math.max(d,1);   // up = forward
-      turn=dx/Math.max(d,1);  // left/right = turn
-    }
-  }
-  // Apply
-  if(turn!==0)player.angle+=turn*TURN_SPD;
-  if(fw!==0){
-    const nx=player.x+Math.cos(player.angle)*fw*MOVE_SPD;
-    const ny=player.y+Math.sin(player.angle)*fw*MOVE_SPD;
-    if(!isWall(nx,player.y))player.x=nx;
-    if(!isWall(player.x,ny))player.y=ny;
-  }
-  // Camera head bob
-  const isMoving=(fw!==0), isTurning=(turn!==0);
-  if(isMoving){
-    camBobAmt=Math.min(1,camBobAmt+dt*5);
-    camBobT+=dt*9;
-  } else {
-    camBobAmt=Math.max(0,camBobAmt-dt*8);
-  }
-  if(isMoving||isTurning){
-    weaponBobAmt=Math.min(1, weaponBobAmt+dt*4);
-    weaponBobT+=dt*8;
-  } else {
-    weaponBobAmt=Math.max(0, weaponBobAmt-dt*6);
-  }
-  // Decay kick
-  weaponKick=Math.max(0, weaponKick-dt*18);
-  weaponSway += (isTurning ? turn*0.6 : -weaponSway*0.12) * dt * 10;
-  // Unlock door
-  if(player.hasKey){
-    const mx=Math.floor(player.x), my=Math.floor(player.y);
-    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy])=>{
-      if(mapAt(mx+dx,my+dy)===2){MAP[my+dy][mx+dx]=0;player.hasKey=false;showMsg('DOOR UNLOCKED');}
-    });
-  }
-}
-
-function updateFlashlight(){
-  if(flashlight.on){
-    flashlight.battery=Math.max(0,flashlight.battery-FLASH_DRAIN);
-    if(flashlight.battery<15){flashlight.flicker=Math.random()<0.15?1:0;}
-    else flashlight.flicker=0;
-    if(flashlight.battery===0)flashlight.on=false;
-  }
-}
-
-function updateEnemies(){
-  enemies.forEach((e,i)=>{
-    if(e.state==='dead')return;
-    if(e.hitFlash>0)e.hitFlash--;
-    enemyAtkTimers[i]=Math.max(0,enemyAtkTimers[i]-dt);
-
-    const dx=player.x-e.x, dy=player.y-e.y;
-    const distToPlayer=Math.hypot(dx,dy);
-
-    // Can enemy see player?
-    const canSee=distToPlayer<ENEMY_SIGHT && hasLOS(e.x,e.y,player.x,player.y);
-
-    if(canSee){
-      if(e.state!=='chase')playGrowl(); // growl on first spot
-      e.state='chase';e.alertTimer=3.0;
-    }
-    else if(e.alertTimer>0){e.alertTimer-=dt;}
-    else if(e.state==='chase'){e.state='patrol';}
-
-    if(e.state==='chase'||e.alertTimer>0){
-      // Move toward player
-      const ang=Math.atan2(dy,dx);
-      const nx=e.x+Math.cos(ang)*ENEMY_SPD;
-      const ny=e.y+Math.sin(ang)*ENEMY_SPD;
-      if(!isWall(nx,e.y))e.x=nx;
-      if(!isWall(e.x,ny))e.y=ny;
-      e.angle=ang;
-      // Attack player
-      if(distToPlayer<ENEMY_ATK_RANGE&&enemyAtkTimers[i]<=0){
-        player.health-=12;
-        damageFlash=14;
-        shakeMag=5;
-        hurtTimer=0.4;
-        playHurt();
-        enemyAtkTimers[i]=ENEMY_ATK_CD;
-        if(player.health<=0){player.health=0;state=S.DEAD;}
-      }
-    } else if(e.state==='patrol'){
-      // Simple patrol: turn and walk
-      e.patrolAngle+=0.008;
-      const nx=e.x+Math.cos(e.patrolAngle)*ENEMY_SPD*0.5;
-      const ny=e.y+Math.sin(e.patrolAngle)*ENEMY_SPD*0.5;
-      if(!isWall(nx,e.y))e.x=nx; else e.patrolAngle+=Math.PI*0.5;
-      if(!isWall(e.x,ny))e.y=ny;
-      e.angle=e.patrolAngle;
-    }
-  });
-}
-
-function hasLOS(x1,y1,x2,y2){
-  const dx=x2-x1,dy=y2-y1,dist=Math.hypot(dx,dy);
-  const steps=Math.ceil(dist*4);
-  for(let i=1;i<steps;i++){
-    const t=i/steps;
-    if(isWall(x1+dx*t,y1+dy*t))return false;
-  }
-  return true;
-}
-
-// ── RENDER ────────────────────────────────────────────────────
-function render(){
-  X.fillStyle='#000';X.fillRect(0,0,RW,RH);
-  if(state===S.TITLE){drawTitle();return;}
-  if(state===S.DEAD) {drawDead(); return;}
-  if(state===S.WIN)  {drawWin();  return;}
-
-  // Screen shake applied to 3D world only
-  X.save();
-  X.translate(Math.round(shakeX), Math.round(shakeY));
-  drawWorld();
-  drawSprites();
-  X.restore();
-
-  drawFlashlight();
-  drawBloodSplats();
-  drawColorGrade();
-  drawHUD();
-  drawMobileControls();
-  drawMessages();
-  if(state===S.INTRO)drawIntro();
-  if(state===S.PAUSE)drawPause();
-  drawVHS();
-}
-
-// ── World rendering ───────────────────────────────────────────
-function drawWorld(){
-  // Apply camera head-bob vertical offset to horizon line
-  const bobOffset=Math.sin(camBobT)*3.5*camBobAmt;
-
-  // Ceiling — near black concrete, slightly lighter at horizon
-  const cg=X.createLinearGradient(0,0,0,RH/2+bobOffset);
-  cg.addColorStop(0,'#0e0c0a');cg.addColorStop(1,'#1e1c18');
-  X.fillStyle=cg;X.fillRect(0,0,RW,RH/2+bobOffset);
-
-  // Floor — very dark worn linoleum
-  const fg=X.createLinearGradient(0,RH/2+bobOffset,0,RH);
-  fg.addColorStop(0,'#1a1812');fg.addColorStop(1,'#0e0c08');
-  X.fillStyle=fg;X.fillRect(0,RH/2+bobOffset,RW,RH/2-bobOffset);
-
-  const rays=castRays();
-
-  for(let col=0;col<RAYS;col++){
-    const {dist,wallType,side,wallX}=rays[col];
-    zBuf[col]=dist;
-
-    const lineH=Math.floor(RH/dist);
-    const drawStart=Math.max(0,Math.floor((RH+bobOffset*2-lineH)/2));
-    const drawEnd  =Math.min(RH-1,Math.floor((RH+bobOffset*2+lineH)/2));
-
-    const wc=WALL_COLS[Math.min(wallType,WALL_COLS.length-1)]||WALL_COLS[1];
-    const baseCol=side===0?(wallX>0.5?wc.light:wc.ns):(wallX>0.5?wc.ew:wc.dark);
-    const r0=parseInt(baseCol.slice(1,3),16);
-    const g0=parseInt(baseCol.slice(3,5),16);
-    const b0=parseInt(baseCol.slice(5,7),16);
-
-    // ── Per-column lighting ──────────────────────────────────
-    // 1. Ambient — dim flickering emergency fluorescents
-    let ambient=0.30;
-
-    // 2. Nearest overhead light contribution
-    let lightAdd=0;
-    LIGHT_SOURCES.forEach((ls,li)=>{
-      const ldx=ls.x+0.5-player.x, ldy=ls.y+0.5-player.y;
-      const ldist=Math.hypot(ldx,ldy);
-      if(ldist>10)return;
-      const rayAngle=player.angle - HALF_FOV + (col/RAYS)*FOV;
-      const toLight=Math.atan2(ldy,ldx);
-      let da=toLight-rayAngle;
-      while(da>Math.PI)da-=Math.PI*2;
-      while(da<-Math.PI)da+=Math.PI*2;
-      if(Math.abs(da)>Math.PI*0.7)return;
-      const falloff=Math.max(0, 1-(ldist+dist*0.4)/9);
-      lightAdd+=falloff*lightFlicker[li]*0.65;
-    });
-
-    // 3. Flashlight — wide readable cone
-    let flAdd=0;
-    if(flashlight.on&&!flashlight.flicker){
-      const edgeFrac=Math.abs((col/RW)-0.5)*2;
-      const cone=Math.max(0,1-edgeFrac*edgeFrac*1.4);
-      const distFade=Math.max(0,1-dist/13);
-      flAdd=cone*distFade*0.9;
-    }
-
-    // 4. Combine — ambient keeps it always readable
-    const distShade=Math.max(0.2, 1-dist/16);
-    const bright=Math.min(1, (ambient + lightAdd + flAdd) * distShade);
-
-    // Cold hospital tint — slightly push green channel
-    const r=Math.min(255,Math.floor(r0*bright*0.85));
-    const g=Math.min(255,Math.floor(g0*bright*1.05));
-    const b=Math.min(255,Math.floor(b0*bright*0.92));
-
-    // PS1-style dither: every 2nd column at far distance gets dimmer
-    const dither=(col%2===1&&dist>4)?-10:0;
-    X.fillStyle=`rgb(${Math.max(0,r+dither)},${Math.max(0,g+dither)},${Math.max(0,b+dither)})`;
-    X.fillRect(col,drawStart,1,drawEnd-drawStart);
-  }
-}
-
-// ── Sprite rendering ──────────────────────────────────────────
-function drawSprites(){
-  // Gather all sprites (enemies + items)
-  const sprites=[];
-  enemies.forEach((e,i)=>{
-    if(e.state==='dead')return;
-    const sp=projectSprite(e.x,e.y);
-    if(sp)sprites.push({...sp,type:'enemy',idx:i,e});
-  });
-  items.forEach(it=>{
-    if(!it.alive)return;
-    const sp=projectSprite(it.x,it.y);
-    if(sp)sprites.push({...sp,type:it.type,it});
-  });
-  // Sort by distance (farthest first)
-  sprites.sort((a,b)=>b.dist-a.dist);
-
-  sprites.forEach(sp=>{
-    const {screenX,dist,h,type,e,it}=sp;
-    const w=Math.max(1,h);
-    const x0=Math.floor(screenX-w/2);
-
-    if(type==='enemy'){
-      const alert=e.state==='chase'||e.alertTimer>0;
-      const hit=e.hitFlash>0;
-      const y0=Math.floor((RH-h)/2);
-
-      for(let col=x0;col<x0+w;col++){
-        if(col<0||col>=RW)continue;
-        if(dist>zBuf[col])continue;
-        const u=(col-x0)/w;
-
-        // ── Gaunt creature anatomy in UV ──────────────────────
-        // HEAD — narrow, elongated, skull-like
-        const hL=x0+Math.floor(w*.32), hR=x0+Math.floor(w*.68);
-        const headTop=y0, headBot=y0+Math.floor(h*.22);
-        if(col>=hL&&col<hR){
-          // Skull colour — pale grey-green
-          const sk=hit?'#ee3333':alert?'#8a9a7a':'#7a8a6c';
-          X.fillStyle=sk; X.fillRect(col,headTop,1,headBot-headTop);
-          // Hollow black eye sockets (close range only)
-          if(dist<7){
-            const eyeY=y0+Math.floor(h*.08);
-            const eyeH=Math.max(1,Math.floor(h*.07));
-            if(u>0.35&&u<0.46){X.fillStyle='#080508';X.fillRect(col,eyeY,1,eyeH);}
-            if(u>0.54&&u<0.65){X.fillStyle='#080508';X.fillRect(col,eyeY,1,eyeH);}
-            // Red iris glow when chasing
-            if(alert&&dist<4){
-              if((u>0.37&&u<0.44)||(u>0.56&&u<0.63)){
-                X.fillStyle='#660000'; X.fillRect(col,eyeY+1,1,Math.max(1,eyeH-2));
-              }
-            }
-          }
-          // Jaw / mouth — dark gash
-          if(u>0.38&&u<0.62){
-            const mY=y0+Math.floor(h*.17);
-            X.fillStyle='#1a0808'; X.fillRect(col,mY,1,Math.max(1,Math.floor(h*.04)));
-          }
-        }
-
-        // NECK — very thin
-        const nL=x0+Math.floor(w*.44), nR=x0+Math.floor(w*.56);
-        const neckTop=headBot, neckBot=y0+Math.floor(h*.27);
-        if(col>=nL&&col<nR){
-          X.fillStyle=hit?'#cc2222':'#5a6a52';
-          X.fillRect(col,neckTop,1,neckBot-neckTop);
-        }
-
-        // SHOULDERS — wide angular shelf
-        const shL=x0+Math.floor(w*.12), shR=x0+Math.floor(w*.88);
-        const shTop=y0+Math.floor(h*.25), shBot=y0+Math.floor(h*.32);
-        if(col>=shL&&col<shR){
-          X.fillStyle=hit?'#bb2020':'#2a2a3a'; // dark torn gown
-          X.fillRect(col,shTop,1,shBot-shTop);
-          // Shoulder bone protrusion highlight
-          if((u>0.12&&u<0.22)||(u>0.78&&u<0.88)){
-            X.fillStyle='#4a5a44'; X.fillRect(col,shTop,1,Math.floor((shBot-shTop)*0.5));
-          }
-        }
-
-        // TORSO — torn hospital gown
-        const tL=x0+Math.floor(w*.28), tR=x0+Math.floor(w*.72);
-        const torsoTop=y0+Math.floor(h*.30), torsoBot=y0+Math.floor(h*.68);
-        if(col>=tL&&col<tR){
-          X.fillStyle=hit?'#cc1818':'#1e1e2c';
-          X.fillRect(col,torsoTop,1,torsoBot-torsoTop);
-          // Rib suggestion stripes
-          if(dist<5&&u>0.34&&u<0.66){
-            for(let ri=0;ri<3;ri++){
-              const ry=torsoTop+Math.floor((torsoBot-torsoTop)*(0.2+ri*0.22));
-              X.fillStyle='rgba(100,130,90,0.35)'; X.fillRect(col,ry,1,1);
-            }
-          }
-          // Blood stain on gown when hit
-          if(hit&&u>0.38&&u<0.58){
-            X.fillStyle='rgba(180,0,0,0.7)';
-            X.fillRect(col,torsoTop+Math.floor(h*.05),1,Math.floor(h*.12));
-          }
-        }
-
-        // ARMS — long, past hips, spindly
-        const armTop=y0+Math.floor(h*.28), armBot=y0+Math.floor(h*.84);
-        const laL=x0+Math.floor(w*.06), laR=x0+Math.floor(w*.20);
-        const raL=x0+Math.floor(w*.80), raR=x0+Math.floor(w*.94);
-        const armCol=hit?'#cc2222':alert?'#808a72':'#6a7862';
-        if((col>=laL&&col<laR)||(col>=raL&&col<raR)){
-          X.fillStyle=armCol; X.fillRect(col,armTop,1,armBot-armTop);
-        }
-        // Bony hands
-        const handTop=armBot, handBot=y0+Math.floor(h*.90);
-        if((col>=laL&&col<laR)||(col>=raL&&col<raR)){
-          X.fillStyle=hit?'#dd3333':'#5a6a50';
-          X.fillRect(col,handTop,1,handBot-handTop);
-        }
-
-        // LEGS
-        const legTop=y0+Math.floor(h*.66), legBot=y0+h;
-        const ll1=x0+Math.floor(w*.30), lr1=x0+Math.floor(w*.46);
-        const ll2=x0+Math.floor(w*.54), lr2=x0+Math.floor(w*.70);
-        const legCol=hit?'#cc2222':'#1a1a28';
-        if((col>=ll1&&col<lr1)||(col>=ll2&&col<lr2)){
-          X.fillStyle=legCol; X.fillRect(col,legTop,1,legBot-legTop);
-        }
-
-        zBuf[col]=dist;
-      }
-
-      // Alert "!" indicator
-      if(alert&&dist<7){
-        X.fillStyle='rgba(255,40,40,.9)';
-        X.font='bold 7px monospace'; X.textAlign='center';
-        X.fillText('!',screenX,Math.floor((RH-h)/2)-3);
-      }
-
-      // HP pips close range
-      if(dist<3&&e.health>0){
-        for(let p=0;p<e.health;p++){
-          X.fillStyle='#ff4444';
-          X.fillRect(screenX-8+p*5, Math.floor((RH-h)/2)-8, 4, 3);
-        }
-      }
-    } else {
-      // Item sprite — glowing coloured box
-      const col2=type==='key'?'#ffdd44':type==='health'?'#44ff88':'#4488ff';
-      const pu=(Math.sin(gameTime*3)+1)/2;
-      const y0=Math.floor((RH-h*.5)/2);
-      const ih=Math.floor(h*.5);
-      for(let col=x0+Math.floor(w*.3);col<x0+Math.floor(w*.7);col++){
-        if(col<0||col>=RW)continue;
-        if(dist>zBuf[col])continue;
-        X.fillStyle=col2;
-        X.fillRect(col,y0,1,ih);
-      }
-      // Glow
-      if(dist<3){
-        X.globalAlpha=0.3+pu*.2;
-        X.fillStyle=col2;
-        X.fillRect(x0+Math.floor(w*.2),y0-1,Math.floor(w*.6),ih+2);
-        X.globalAlpha=1;
-      }
-    }
-  });  // end sprites.forEach
-
-  // ── World-space blood decals (floor puddles) ──────────────────
-  bloodDecals.forEach(b=>{
-    const sp=projectSprite(b.wx,b.wy);
-    if(!sp)return;
-    const {screenX,dist}=sp;
-    if(dist>zBuf[screenX])return;
-    // Flat ellipse at floor level
-    const floorY=Math.floor(RH/2 + Math.min(RH/2-2, RH/(dist*2.2)));
-    const pw=Math.max(1,Math.floor(RH/(dist*1.8)));
-    const ph=Math.max(1,Math.floor(pw*0.3));
-    X.globalAlpha=b.a*0.85;
-    X.fillStyle='#660000';
-    X.beginPath();
-    X.ellipse(screenX,floorY,pw,ph,0,0,Math.PI*2);
-    X.fill();
-    X.fillStyle='#440000';
-    X.beginPath();
-    X.ellipse(screenX,floorY,Math.max(1,pw-2),Math.max(1,ph-1),0,0,Math.PI*2);
-    X.fill();
-    X.globalAlpha=1;
-  });
-}
-function drawFlashlight(){
+  // ── Score + level top-right ─────────────────────────────────
+  X.font='bold 18px monospace'; X.textAlign='right';
+  X.fillStyle='rgba(0,0,0,.7)'; X.fillRect(RW-240,6,234,50);
+  X.fillStyle='#ffdd44'; X.fillText(`SCORE  ${score}`,RW-10,28);
+  X.fillStyle='#ff9944'; X.fillText(`LV ${currentLevel+1}  ${LEVELS[currentLevel].name}`,RW-10,50);
+
+  // ── Crosshair ───────────────────────────────────────────────
   const cx=RW/2, cy=RH/2;
-  if(flashlight.on && !flashlight.flicker){
-    // Cone of light — bright oval in centre, hard darkness at edges
-    const vg=X.createRadialGradient(cx,cy-10,4, cx,cy,RH*.6);
-    vg.addColorStop(0,'rgba(0,0,0,0)');
-    vg.addColorStop(0.45,'rgba(0,0,0,0)');
-    vg.addColorStop(0.72,'rgba(0,0,0,0.55)');
-    vg.addColorStop(1,'rgba(0,0,0,0.96)');
-    X.fillStyle=vg; X.fillRect(0,0,RW,RH);
-    // Subtle warm tint from flashlight centre
-    const wg=X.createRadialGradient(cx,cy,0,cx,cy,RH*.3);
-    wg.addColorStop(0,'rgba(255,240,200,0.04)');
-    wg.addColorStop(1,'rgba(0,0,0,0)');
-    X.fillStyle=wg; X.fillRect(0,0,RW,RH);
-  } else {
-    // Flashlight off — near total darkness, only faint emergency green
-    X.fillStyle='rgba(0,0,0,0.88)'; X.fillRect(0,0,RW,RH);
-    // Tiny green ember glow at centre
-    const eg=X.createRadialGradient(cx,cy,0,cx,cy,30);
-    eg.addColorStop(0,'rgba(0,60,20,0.18)');
-    eg.addColorStop(1,'rgba(0,0,0,0)');
-    X.fillStyle=eg; X.fillRect(0,0,RW,RH);
-  }
-}
-
-// ── Blood splats ──────────────────────────────────────────────
-function drawBloodSplats(){
-  bloodSplats.forEach(b=>{
-    X.globalAlpha=b.a*0.85;
-    X.fillStyle='#8b0000';
-    X.beginPath();X.arc(b.x,b.y,b.r,0,Math.PI*2);X.fill();
-    // Lighter centre
-    X.fillStyle='#cc1111';
-    X.beginPath();X.arc(b.x,b.y,b.r*0.4,0,Math.PI*2);X.fill();
-  });
-  X.globalAlpha=1;
-}
-
-// ── Cold hospital color grade ─────────────────────────────────
-function drawColorGrade(){
-  // Desaturating blue-green tint over everything — RE1 / Silent Hill feel
-  X.fillStyle='rgba(0,15,25,0.18)'; X.fillRect(0,0,RW,RH);
-  // Subtle green scanline shimmer on ceiling half
-  X.fillStyle='rgba(0,20,8,0.10)'; X.fillRect(0,0,RW,RH/2);
-}
-
-// ── HUD ───────────────────────────────────────────────────────
-function drawHUD(){
-  // Health bar
-  const hpPct=player.health/player.maxHealth;
-  const hpCol=hpPct>0.5?'#22cc44':hpPct>0.25?'#ccaa00':'#cc2222';
-  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(3,RH-14,62,10);
-  X.fillStyle=hpCol;X.fillRect(4,RH-13,Math.floor(60*hpPct),8);
-  X.strokeStyle='rgba(255,255,255,.3)';X.lineWidth=1;X.strokeRect(3,RH-14,62,10);
-  X.font='bold 5px monospace';X.fillStyle='#fff';X.textAlign='left';
-  X.fillText(`HP ${player.health}`,4,RH-17);
-
-  // Flashlight battery
-  const batPct=flashlight.battery/100;
-  const batCol=batPct>0.4?'#4488ff':batPct>0.2?'#8844ff':'#ff4444';
-  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(3,RH-28,62,8);
-  X.fillStyle=batCol;X.fillRect(4,RH-27,Math.floor(60*batPct),6);
-  X.strokeStyle='rgba(255,255,255,.3)';X.lineWidth=1;X.strokeRect(3,RH-28,62,8);
-  X.font='bold 5px monospace';X.fillStyle='#aaaaff';X.textAlign='left';
-  X.fillText(`LIGHT`,4,RH-31);
-
-  // Key indicator
-  if(player.hasKey){
-    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW-28,RH-22,24,18);
-    X.fillStyle='#ffdd44';X.font='bold 7px monospace';X.textAlign='center';
-    X.fillText('KEY',RW-16,RH-10);
-  }
-
-  // ── Level + score top-right ──
-  X.font='bold 6px monospace';X.textAlign='right';
-  X.fillStyle='rgba(0,0,0,.55)';X.fillRect(RW-82,2,80,24);
-  X.fillStyle='#ffdd44';X.fillText(`SCORE ${score}`,RW-4,11);
-  X.fillStyle='#ff8844';X.fillText(`LV${currentLevel+1} ${LEVELS[currentLevel].name.slice(0,9)}`,RW-4,21);
-
-  // ── Crosshair — turns red when enemy in range ──
-  const cx=RW/2,cy=RH/2;
   const enemyClose=enemies.some(e=>e.state!=='dead'&&Math.hypot(e.x-player.x,e.y-player.y)<2.2);
-  X.strokeStyle=enemyClose?'rgba(255,60,60,.9)':'rgba(255,255,255,.7)';
-  X.lineWidth=1;
-  X.beginPath();X.moveTo(cx-5,cy);X.lineTo(cx-2,cy);X.stroke();
-  X.beginPath();X.moveTo(cx+2,cy);X.lineTo(cx+5,cy);X.stroke();
-  X.beginPath();X.moveTo(cx,cy-5);X.lineTo(cx,cy-2);X.stroke();
-  X.beginPath();X.moveTo(cx,cy+2);X.lineTo(cx,cy+5);X.stroke();
+  const chCol=enemyClose?'rgba(255,50,50,.95)':'rgba(255,255,255,.75)';
+  X.strokeStyle=chCol; X.lineWidth=2.5;
+  X.beginPath(); X.moveTo(cx-14,cy); X.lineTo(cx-5,cy); X.stroke();
+  X.beginPath(); X.moveTo(cx+5, cy); X.lineTo(cx+14,cy); X.stroke();
+  X.beginPath(); X.moveTo(cx,cy-14); X.lineTo(cx,cy-5);  X.stroke();
+  X.beginPath(); X.moveTo(cx,cy+5);  X.lineTo(cx,cy+14); X.stroke();
   if(enemyClose){
-    X.strokeStyle='rgba(255,60,60,.4)';
-    X.beginPath();X.arc(cx,cy,4,0,Math.PI*2);X.stroke();
+    X.strokeStyle='rgba(255,50,50,.5)'; X.lineWidth=2;
+    X.beginPath(); X.arc(cx,cy,10,0,Math.PI*2); X.stroke();
   }
 
-  // ── GoldenEye-style first-person gun ─────────────────────────
-  const bobY = Math.sin(weaponBobT) * 5 * weaponBobAmt;
-  const bobX = Math.sin(weaponBobT * 0.5) * 3 * weaponBobAmt;
-  // Prominent position — large, bottom-right, partially off screen
-  const gx = RW - 88 + bobX + weaponSway * 4;
-  const gy = RH - 52 + bobY - weaponKick * 1.5;
+  // ── GoldenEye gun ───────────────────────────────────────────
+  const bobY=Math.sin(weaponBobT)*8*weaponBobAmt;
+  const bobX=Math.sin(weaponBobT*0.5)*5*weaponBobAmt;
+  const gx=RW-160+bobX+weaponSway*6;
+  const gy=RH-96+bobY-weaponKick*2.5;
 
   X.save();
-  X.translate(gx, gy);
-  X.scale(1.55, 1.55);  // GoldenEye scale — dominates bottom-right
+  X.translate(gx,gy);
+  X.scale(3.2,3.2);
 
-  // ── GoldenEye silver silenced pistol ─────────────────────────
-  // Gun shadow
-  X.fillStyle = 'rgba(0,0,0,.4)';
-  X.fillRect(2, 5, 80, 35);
-
-  // ── SILENCER — long cylinder extending forward ──
-  // Outer silencer body — dark gunmetal cylinder
-  X.fillStyle = '#484848';
-  X.fillRect(46, 4, 36, 11);
-  // Silencer top highlight (chrome glint)
-  X.fillStyle = '#888';
-  X.fillRect(46, 4, 36, 3);
-  // Silencer mid band — subtle light stripe
-  X.fillStyle = '#666';
-  X.fillRect(46, 7, 36, 2);
-  // Silencer shadow underside
-  X.fillStyle = '#222';
-  X.fillRect(46, 13, 36, 2);
-  // Silencer end cap
-  X.fillStyle = '#333';
-  X.fillRect(80, 3, 4, 13);
-  X.fillStyle = '#555';
-  X.fillRect(80, 3, 4, 3);
-  // Silencer wrap rings (detail)
-  X.fillStyle = '#383838';
-  for(let r=0;r<4;r++){X.fillRect(51+r*8,4,1,11);}
-
-  // ── PISTOL BODY — silver chrome ──
-  // Main slide — silver with PS1 flat-shade faces
-  X.fillStyle = '#a0a8b0';  // silver
-  X.beginPath();
-  X.moveTo(16, 8);
-  X.lineTo(50, 8);
-  X.lineTo(50, 20);
-  X.lineTo(16, 20);
-  X.closePath();
-  X.fill();
-  // Slide top highlight — brighter chrome
-  X.fillStyle = '#c8d0d8';
-  X.fillRect(16, 8, 34, 4);
-  // Slide bottom shadow
-  X.fillStyle = '#788090';
-  X.fillRect(16, 17, 34, 3);
-  // Serrations on rear of slide (grip texture)
-  X.fillStyle = '#6a7280';
-  for(let s=0;s<5;s++){X.fillRect(17+s*2,9,1,9);}
-  // Ejection port cut-out
-  X.fillStyle = '#2a2a2a';
-  X.fillRect(32, 9, 10, 6);
-  // Ejection port inner glint
-  X.fillStyle = '#444';
-  X.fillRect(32, 9, 10, 2);
-
-  // Frame / dust cover (below slide) — slightly darker silver
-  X.fillStyle = '#8a9298';
-  X.fillRect(20, 20, 30, 8);
-  X.fillStyle = '#9aA2a8';
-  X.fillRect(20, 20, 30, 3);
-  // Rail detail on dust cover
-  X.fillStyle = '#707880';
-  X.fillRect(22, 23, 26, 2);
-
-  // ── GRIP — dark polymer, slightly angled ──
-  X.fillStyle = '#222228';
-  X.beginPath();
-  X.moveTo(18, 20);
-  X.lineTo(24, 20);
-  X.lineTo(22, 42);
-  X.lineTo(12, 42);
-  X.closePath();
-  X.fill();
-  // Grip highlight face
-  X.fillStyle = '#333338';
-  X.beginPath();
-  X.moveTo(18, 20);
-  X.lineTo(24, 20);
-  X.lineTo(23, 26);
-  X.lineTo(17, 26);
-  X.closePath();
-  X.fill();
-  // Grip stippling
-  X.fillStyle = '#1a1a20';
-  for(let gy2=28;gy2<40;gy2+=3){
-    for(let gx2=13;gx2<22;gx2+=2){X.fillRect(gx2,gy2,1,1);}
+  // Shadow
+  X.fillStyle='rgba(0,0,0,.5)'; X.fillRect(2,5,80,35);
+  // Silencer
+  X.fillStyle='#484848'; X.fillRect(46,4,36,11);
+  X.fillStyle='#888';    X.fillRect(46,4,36,3);
+  X.fillStyle='#666';    X.fillRect(46,7,36,2);
+  X.fillStyle='#222';    X.fillRect(46,13,36,2);
+  X.fillStyle='#333';    X.fillRect(80,3,4,13);
+  X.fillStyle='#555';    X.fillRect(80,3,4,3);
+  X.fillStyle='#383838';
+  for(let r=0;r<4;r++) X.fillRect(51+r*8,4,1,11);
+  // Slide
+  X.fillStyle='#a0a8b0';
+  X.beginPath(); X.moveTo(16,8); X.lineTo(50,8); X.lineTo(50,20); X.lineTo(16,20); X.closePath(); X.fill();
+  X.fillStyle='#c8d0d8'; X.fillRect(18,8,28,4);
+  X.fillStyle='#606870'; X.fillRect(18,17,28,3);
+  X.fillStyle='#484858';
+  for(let s=0;s<5;s++) X.fillRect(20+s*4,9,2,8);
+  X.fillStyle='#282830'; X.fillRect(36,9,8,7);
+  // Frame
+  X.fillStyle='#2a2e32';
+  X.beginPath(); X.moveTo(20,20); X.lineTo(46,20); X.lineTo(44,38); X.lineTo(18,38); X.closePath(); X.fill();
+  X.fillStyle='#1a1e22'; X.fillRect(30,22,12,14);
+  X.fillStyle='rgba(0,0,0,0.3)';
+  for(let g=0;g<3;g++) for(let r=0;r<4;r++) X.fillRect(22+g*5,24+r*3,3,2);
+  X.strokeStyle='#383838'; X.lineWidth=1.5;
+  X.beginPath(); X.moveTo(28,20); X.quadraticCurveTo(22,28,26,34); X.stroke();
+  // Muzzle flash
+  if(attackFlash>0){
+    const f=attackFlash/8;
+    X.fillStyle=`rgba(255,220,80,${f*0.9})`;
+    X.beginPath(); X.arc(82,9,6*f,0,Math.PI*2); X.fill();
+    X.fillStyle=`rgba(255,255,200,${f*0.7})`;
+    X.beginPath(); X.arc(82,9,3*f,0,Math.PI*2); X.fill();
   }
-  // Mag base
-  X.fillStyle = '#181818';
-  X.fillRect(11, 40, 12, 3);
-
-  // Trigger guard — silver wire loop
-  X.strokeStyle = '#8090a0'; X.lineWidth = 1.5;
-  X.beginPath();
-  X.moveTo(26, 20);
-  X.quadraticCurveTo(24, 30, 32, 30);
-  X.stroke();
-  // Trigger
-  X.fillStyle = '#909898';
-  X.fillRect(28, 22, 2, 6);
-
-  // ── ARM / HAND rising from bottom ──
-  X.fillStyle = '#141210';  // dark jacket
-  X.beginPath();
-  X.moveTo(8, 38);
-  X.lineTo(22, 26);
-  X.lineTo(36, 28);
-  X.lineTo(46, 36);
-  X.lineTo(46, 60);
-  X.lineTo(8, 60);
-  X.closePath();
-  X.fill();
-  // Sleeve highlight
-  X.fillStyle = '#1e1c18';
-  X.beginPath();
-  X.moveTo(8, 38);
-  X.lineTo(22, 26);
-  X.lineTo(36, 28);
-  X.lineTo(46, 36);
-  X.closePath();
-  X.fill();
-  // Hand — wrapping grip
-  X.fillStyle = '#5a3c28';
-  X.beginPath();
-  X.moveTo(14, 32);
-  X.lineTo(22, 24);
-  X.lineTo(34, 26);
-  X.lineTo(38, 34);
-  X.lineTo(14, 36);
-  X.closePath();
-  X.fill();
-  // Knuckle highlight
-  X.fillStyle = '#6a4c38';
-  X.fillRect(16, 26, 16, 4);
-  // Thumb detail
-  X.fillStyle = '#5a3c28';
-  X.fillRect(38, 28, 6, 8);
-
-  // ── Muzzle flash — at silencer tip ──
-  if(attackFlash > 4){
-    const fa = (attackFlash - 4) / 4;
-    X.globalAlpha = fa;
-    // Suppressed flash — smaller, mostly white with slight yellow
-    X.fillStyle = '#ffffff';
-    X.beginPath(); X.arc(83, 9, 4*fa, 0, Math.PI*2); X.fill();
-    X.fillStyle = '#ffffaa';
-    X.beginPath(); X.arc(83, 9, 6*fa, 0, Math.PI*2); X.fill();
-    // Tight spikes (silencer suppresses most flash)
-    X.strokeStyle = '#ffffcc'; X.lineWidth = 1;
-    for(let i=0;i<4;i++){
-      const ang=i/4*Math.PI*2;
-      X.globalAlpha=fa*0.5;
-      X.beginPath();
-      X.moveTo(83,9);
-      X.lineTo(83+Math.cos(ang)*7*fa, 9+Math.sin(ang)*5*fa);
-      X.stroke();
-    }
-    // Very subtle screen flash (silenced)
-    X.globalAlpha=fa*0.08;
-    X.fillStyle='#ffffaa';
-    X.fillRect(-gx,-gy,RW,RH);
-    X.globalAlpha=1;
-  }
-
   X.restore();
 
-  // Damage flash
-  if(damageFlash>0){
-    X.globalAlpha=damageFlash/14*.45;
-    X.fillStyle='#cc0000';X.fillRect(0,0,RW,RH);
-    X.globalAlpha=1;
-  }
-
-  // Minimap (tiny, corner)
+  // ── Minimap ─────────────────────────────────────────────────
   drawMinimap();
+
+  // ── Damage flash ────────────────────────────────────────────
+  if(damageFlash>0){
+    X.fillStyle=`rgba(180,0,0,${damageFlash*0.018})`;
+    X.fillRect(0,0,RW,RH);
+  }
 }
 
 function drawMinimap(){
-  const ms=3, ox=RW-MAPW*ms-3, oy=3;
-  X.fillStyle='rgba(0,0,0,.7)';X.fillRect(ox-1,oy-1,MAPW*ms+2,MAPH*ms+2);
+  const ms=7, ox=RW-MAPW*ms-14, oy=14;
+  X.fillStyle='rgba(0,0,0,.8)'; X.fillRect(ox-3,oy-3,MAPW*ms+6,MAPH*ms+6);
   for(let my=0;my<MAPH;my++){
     for(let mx=0;mx<MAPW;mx++){
       const v=MAP[my][mx];
       if(v===0)continue;
-      X.fillStyle=v===1?'#333':v===2?'#622':v===3?'#262':'#444';
+      X.fillStyle=v===1?'#2a2a2a':v===2?'#622222':v===3?'#224422':v===6?'#1a4030':v===7?'#4a4020':v===8?'#1a2840':'#333';
       X.fillRect(ox+mx*ms,oy+my*ms,ms,ms);
     }
   }
-  // Items
   items.forEach(it=>{
     if(!it.alive)return;
     X.fillStyle=it.type==='key'?'#ffdd44':'#44ff88';
-    X.fillRect(ox+Math.floor(it.x)*ms,oy+Math.floor(it.y)*ms,ms,ms);
+    X.fillRect(ox+Math.floor(it.x)*ms+1,oy+Math.floor(it.y)*ms+1,ms-1,ms-1);
   });
-  // Enemies
   enemies.forEach(e=>{
     if(e.state==='dead')return;
-    X.fillStyle=e.state==='chase'?'#ff4444':'#884444';
+    X.fillStyle=e.state==='chase'?'#ff4444':'#882222';
     X.fillRect(ox+Math.floor(e.x)*ms+1,oy+Math.floor(e.y)*ms+1,ms-1,ms-1);
   });
-  // Player
-  X.fillStyle='#44aaff';
-  X.fillRect(ox+Math.floor(player.x)*ms,oy+Math.floor(player.y)*ms,ms,ms);
-  // Direction
-  X.strokeStyle='#44aaff';X.lineWidth=1;
-  X.beginPath();
-  X.moveTo(ox+player.x*ms,oy+player.y*ms);
-  X.lineTo(ox+player.x*ms+Math.cos(player.angle)*5,oy+player.y*ms+Math.sin(player.angle)*5);
+  const px=ox+player.x*ms, py=oy+player.y*ms;
+  X.fillStyle='#55aaff'; X.fillRect(px-2,py-2,6,6);
+  X.strokeStyle='#55aaff'; X.lineWidth=2;
+  X.beginPath(); X.moveTo(px+1,py+1);
+  X.lineTo(px+1+Math.cos(player.angle)*11,py+1+Math.sin(player.angle)*11);
   X.stroke();
 }
 
@@ -3550,36 +2041,57 @@ function drawMessages(){
   if(msgTimer>0&&msgText){
     const a=Math.min(1,msgTimer);
     X.globalAlpha=a;
-    X.font='bold 8px monospace';X.textAlign='center';
-    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-40,4,80,12);
-    X.fillStyle='#ffffaa';X.fillText(msgText,RW/2,13);
+    X.font='bold 16px monospace'; X.textAlign='center';
+    X.fillStyle='rgba(0,0,0,.7)'; X.fillRect(RW/2-90,8,180,24);
+    X.fillStyle='#ffffaa'; X.fillText(msgText,RW/2,26);
     X.globalAlpha=1;
   }
 
-  // Item proximity glow hint — no button needed, just walk over
   items.forEach(it=>{
     if(!it.alive)return;
     if(Math.hypot(it.x-player.x,it.y-player.y)<1.5){
       const pulse=(Math.sin(gameTime*6)+1)/2;
       X.globalAlpha=0.5+pulse*0.45;
-      X.font='bold 6px monospace';X.textAlign='center';
-      X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-32,RH/2+10,64,10);
+      X.font='bold 15px monospace'; X.textAlign='center';
+      X.fillStyle='rgba(0,0,0,.65)'; X.fillRect(RW/2-100,RH/2+16,200,22);
       X.fillStyle='#ffdd88';
-      X.fillText(it.type==='key'?'▶ KEY — WALK OVER':'▶ MEDS — WALK OVER',RW/2,RH/2+18);
+      X.fillText(it.type==='key'?'▶ KEY — WALK OVER':'▶ MEDS — WALK OVER',RW/2,RH/2+32);
       X.globalAlpha=1;
     }
   });
 
-  // Find exit hint
-  if(mapAt(Math.floor(player.x+Math.cos(player.angle)), Math.floor(player.y+Math.sin(player.angle)))===3||
+  if(mapAt(Math.floor(player.x+Math.cos(player.angle)),Math.floor(player.y+Math.sin(player.angle)))===3||
      mapAt(player.x,player.y)===3){
-    X.font='bold 6px monospace';X.textAlign='center';
-    X.fillStyle='rgba(0,0,0,.6)';X.fillRect(RW/2-26,RH/2+10,52,10);
-    X.fillStyle='#44ff88';X.fillText('EXIT!',RW/2,RH/2+18);
+    X.font='bold 16px monospace'; X.textAlign='center';
+    X.fillStyle='rgba(0,0,0,.65)'; X.fillRect(RW/2-60,RH/2+16,120,22);
+    X.fillStyle='#44ff88'; X.fillText('EXIT!',RW/2,RH/2+32);
   }
 }
 
-// ── VHS / PS1 noise overlay ───────────────────────────────────
+// ── Mobile controls ───────────────────────────────────────────
+function drawMobileControls(){
+  const jx=52, jy=RH-52;
+  X.strokeStyle='rgba(255,255,255,.18)'; X.lineWidth=2;
+  X.beginPath(); X.arc(jx,jy,32,0,Math.PI*2); X.stroke();
+  if(joystick.active){
+    const dx=Math.max(-26,Math.min(26,joystick.cx-joystick.sx));
+    const dy=Math.max(-26,Math.min(26,joystick.cy-joystick.sy));
+    X.fillStyle='rgba(255,255,255,.28)';
+    X.beginPath(); X.arc(jx+dx,jy+dy,14,0,Math.PI*2); X.fill();
+  } else {
+    X.fillStyle='rgba(255,255,255,.1)';
+    X.beginPath(); X.arc(jx,jy,14,0,Math.PI*2); X.fill();
+  }
+  const ax=RW-46, ay=RH-46;
+  X.fillStyle=atkBtn.active?'rgba(180,40,40,.65)':'rgba(140,20,20,.4)';
+  X.beginPath(); X.arc(ax,ay,28,0,Math.PI*2); X.fill();
+  X.strokeStyle='rgba(255,80,80,.5)'; X.lineWidth=2;
+  X.beginPath(); X.arc(ax,ay,28,0,Math.PI*2); X.stroke();
+  X.font='bold 14px monospace'; X.textAlign='center'; X.fillStyle='rgba(255,180,180,.9)';
+  X.fillText('FIRE',ax,ay+5);
+}
+
+// ── VHS / noise overlay ───────────────────────────────────────
 function drawVHS(){
   // Scanlines
   for(let y=0;y<RH;y+=2){
@@ -3603,191 +2115,139 @@ function drawVHS(){
 
 // ── Screens ───────────────────────────────────────────────────
 function drawTitle(){
-  // Solid dark background — no VHS noise here so text is legible
-  X.fillStyle='#060408';X.fillRect(0,0,RW,RH);
+  X.fillStyle='#060408'; X.fillRect(0,0,RW,RH);
 
-  // Subtle top-to-bottom vignette
-  const vg=X.createLinearGradient(0,0,0,RH);
-  vg.addColorStop(0,'rgba(0,0,0,.55)');
-  vg.addColorStop(0.4,'rgba(0,0,0,0)');
-  vg.addColorStop(1,'rgba(0,0,0,.7)');
+  // Vignette
+  const vg=X.createRadialGradient(RW/2,RH/2,RH*0.1,RW/2,RH/2,RH*0.75);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.75)');
   X.fillStyle=vg; X.fillRect(0,0,RW,RH);
 
-  // ── Title ──────────────────────────────────────────────────
   X.textAlign='center';
 
-  // Shadow pass
-  X.font='bold 11px monospace';
-  X.fillStyle='rgba(0,0,0,.8)';
-  X.fillText('HILYARD STREET',RW/2+2,34);
-  X.font='bold 16px monospace';
-  X.fillText('HOSPITAL',RW/2+2,54);
+  // Main title shadow
+  X.fillStyle='rgba(0,0,0,0.85)';
+  X.font='bold 28px monospace'; X.fillText('HILYARD STREET', RW/2+3, RH*0.16+3);
+  X.font='bold 52px monospace'; X.fillText('HOSPITAL',        RW/2+3, RH*0.30+3);
 
-  // Main title — bright red, readable
-  X.font='bold 11px monospace';
-  X.fillStyle='#dd2222';
-  X.fillText('HILYARD STREET',RW/2,32);
-  X.font='bold 16px monospace';
-  X.fillStyle='#ff3333';
-  X.fillText('HOSPITAL',RW/2,52);
+  // Main title
+  X.fillStyle='#cc1a1a';
+  X.font='bold 28px monospace'; X.fillText('HILYARD STREET', RW/2, RH*0.16);
+  X.fillStyle='#ff2222';
+  X.font='bold 52px monospace'; X.fillText('HOSPITAL',        RW/2, RH*0.30);
 
-  // Blood drips
-  for(let d=0;d<5;d++){
-    const dx=RW/2-22+d*11, len=6+d*5+(d%2)*4;
-    X.fillStyle='#cc0000';X.fillRect(dx,52,2,len);
-    X.fillStyle='#990000';
-    X.beginPath();X.arc(dx+1,52+len,2.5,0,Math.PI*2);X.fill();
+  // Blood drips from title bottom
+  for(let d=0;d<7;d++){
+    const dx=RW/2-60+d*20, len=14+d*10+(d%2)*8;
+    X.fillStyle='#bb0000'; X.fillRect(dx,RH*0.30+3,3,len);
+    X.fillStyle='#880000';
+    X.beginPath(); X.arc(dx+1,RH*0.30+3+len,4,0,Math.PI*2); X.fill();
   }
 
-  // ── Byline ─────────────────────────────────────────────────
-  X.font='6px monospace';
-  X.fillStyle='#cc8866';
-  X.fillText('by Ty Alami',RW/2,74);
+  // Byline
+  X.font='16px monospace'; X.fillStyle='#cc8866';
+  X.fillText('by Ty Alami', RW/2, RH*0.37);
+  X.font='bold 15px monospace'; X.fillStyle='#992222';
+  X.fillText('— A SURVIVAL HORROR EXPERIENCE —', RW/2, RH*0.43);
 
-  X.font='bold 6px monospace';
-  X.fillStyle='#aa4444';
-  X.fillText('A SURVIVAL HORROR EXPERIENCE',RW/2,86);
+  X.fillStyle='#551111';
+  X.fillRect(RW/2-120,RH*0.46,240,2);
 
-  // Divider
-  X.fillStyle='#441111';
-  X.fillRect(RW/2-40,92,80,1);
-
-  // ── Story text — bright enough to read ─────────────────────
-  X.font='6px monospace';
+  // Story
+  X.font='15px monospace';
   const story=[
     'The hospital has been dark for three days.',
-    'You went in to look for your sister.',
+    'You went in looking for your sister.',
     'Something found you first.',
   ];
   story.forEach((t,i)=>{
     X.fillStyle='#bbaa99';
-    X.fillText(t,RW/2,102+i*12);
+    X.fillText(t, RW/2, RH*0.51+i*22);
   });
 
-  // Divider
-  X.fillStyle='#441111';
-  X.fillRect(RW/2-40,140,80,1);
+  X.fillStyle='#551111';
+  X.fillRect(RW/2-120,RH*0.62,240,2);
 
-  // ── Controls — clean and readable ──────────────────────────
-  X.font='5px monospace';
-  X.fillStyle='#8899bb';
-  X.fillText('W A S D  /  drag  —  Move & Turn',RW/2,150);
-  X.fillText('Click  /  tap right  —  Shoot',RW/2,161);
-  X.fillText('Walk over items to pick them up',RW/2,172);
+  // Controls
+  X.font='14px monospace'; X.fillStyle='#7788aa';
+  X.fillText('W A S D  /  Arrow Keys  —  Move & Turn', RW/2, RH*0.67);
+  X.fillText('CLICK / SPACE  —  Shoot', RW/2, RH*0.72);
+  X.fillText('E  —  Pick up items       P  —  Pause', RW/2, RH*0.77);
 
-  // ── Pulse prompt ───────────────────────────────────────────
+  // Prompt
   const pu=(Math.sin(Date.now()/500)+1)/2;
-  X.globalAlpha=.55+pu*.45;
-  X.font='bold 7px monospace';
-  X.fillStyle='#ffcc44';
-  X.fillText('▶  CLICK OR PRESS ENTER TO BEGIN  ◀',RW/2,190);
+  X.globalAlpha=0.6+pu*0.4;
+  X.font='bold 20px monospace'; X.fillStyle='#ffcc44';
+  X.fillText('▶  CLICK OR PRESS ENTER TO BEGIN  ◀', RW/2, RH*0.89);
   X.globalAlpha=1;
 
-  // Just a single subtle scanline pass — no heavy VHS noise
-  X.fillStyle='rgba(0,0,0,0.06)';
-  for(let y=0;y<RH;y+=2)X.fillRect(0,y,RW,1);
+  // Scanlines
+  X.fillStyle='rgba(0,0,0,0.05)';
+  for(let y=0;y<RH;y+=2) X.fillRect(0,y,RW,1);
 }
 
 function drawDead(){
-  X.fillStyle='#0a0000';X.fillRect(0,0,RW,RH);
+  X.fillStyle='#0a0000'; X.fillRect(0,0,RW,RH);
   for(let i=0;i<8;i++){
     X.fillStyle=`rgba(${80+i*10},0,0,.${i+1})`;
-    X.fillRect(i,i,RW-i*2,RH-i*2);
+    X.fillRect(i*2,i*2,RW-i*4,RH-i*4);
   }
-  X.font='bold 16px monospace';X.textAlign='center';
-  X.fillStyle='#440000';X.fillText('YOU DIED',RW/2+1,RH/2-8);
-  X.fillStyle='#cc1111';X.fillText('YOU DIED',RW/2,RH/2-10);
+  X.textAlign='center';
+  X.font='bold 72px monospace'; X.fillStyle='#330000'; X.fillText('YOU DIED',RW/2+3,RH/2+3);
+  X.fillStyle='#cc1111'; X.fillText('YOU DIED',RW/2,RH/2);
   const pu=(Math.sin(Date.now()/600)+1)/2;
-  X.globalAlpha=.35+pu*.6;
-  X.fillStyle='#883333';X.font='bold 5px monospace';
-  X.fillText('CLICK TO TRY AGAIN',RW/2,RH/2+20);
+  X.globalAlpha=.4+pu*.55;
+  X.font='bold 18px monospace'; X.fillStyle='#883333';
+  X.fillText('CLICK TO TRY AGAIN',RW/2,RH/2+50);
   X.globalAlpha=1;
   drawVHS();
 }
 
 function drawWin(){
-  X.fillStyle='#000a04';X.fillRect(0,0,RW,RH);
-  X.font='bold 12px monospace';X.textAlign='center';
-  X.fillStyle='#004422';X.fillText('YOU ESCAPED',RW/2+1,RH/2-8);
-  X.fillStyle='#22cc66';X.fillText('YOU ESCAPED',RW/2,RH/2-10);
-  X.font='5px monospace';X.fillStyle='#336644';
-  X.fillText('You made it out of Hilyard Street.',RW/2,RH/2+8);
-  X.fillText('You never found your sister.',RW/2,RH/2+18);
-  X.fillStyle='#ffdd44';X.fillText(`Score: ${score}  Kills: ${kills}/4`,RW/2,RH/2+22);
+  X.fillStyle='#000a04'; X.fillRect(0,0,RW,RH);
+  X.textAlign='center';
+  X.font='bold 48px monospace'; X.fillStyle='#003318'; X.fillText('YOU ESCAPED',RW/2+2,RH/2-10);
+  X.fillStyle='#22cc66'; X.fillText('YOU ESCAPED',RW/2,RH/2-12);
+  X.font='16px monospace'; X.fillStyle='#336644';
+  X.fillText('You made it out of Hilyard Street.',RW/2,RH/2+30);
+  X.fillText('You never found your sister.',RW/2,RH/2+52);
+  X.fillStyle='#ffdd44'; X.font='bold 16px monospace';
+  X.fillText(`Score: ${score}    Kills: ${kills}`,RW/2,RH/2+76);
   const pu=(Math.sin(Date.now()/600)+1)/2;
-  X.globalAlpha=.35+pu*.6;
-  X.fillStyle='#448855';X.font='bold 5px monospace';
-  X.fillText('CLICK TO PLAY AGAIN',RW/2,RH/2+24);
+  X.globalAlpha=.4+pu*.55;
+  X.font='bold 18px monospace'; X.fillStyle='#448855';
+  X.fillText('CLICK TO PLAY AGAIN',RW/2,RH/2+108);
   X.globalAlpha=1;
   drawVHS();
 }
 
-// ── On-screen mobile controls ─────────────────────────────────
-function drawMobileControls(){
-  // Left zone — joystick ring
-  const jx=38, jy=RH-36;
-  X.strokeStyle='rgba(255,255,255,.18)';X.lineWidth=1;
-  X.beginPath();X.arc(jx,jy,22,0,Math.PI*2);X.stroke();
-  if(joystick.active){
-    const dx=Math.max(-18,Math.min(18,joystick.cx-joystick.sx));
-    const dy=Math.max(-18,Math.min(18,joystick.cy-joystick.sy));
-    X.fillStyle='rgba(255,255,255,.28)';
-    X.beginPath();X.arc(jx+dx,jy+dy,10,0,Math.PI*2);X.fill();
-  } else {
-    X.fillStyle='rgba(255,255,255,.1)';
-    X.beginPath();X.arc(jx,jy,10,0,Math.PI*2);X.fill();
-  }
-  X.fillStyle='rgba(255,255,255,.22)';X.font='6px monospace';X.textAlign='center';
-  X.fillText('▲',jx,jy-14);X.fillText('▼',jx,jy+20);
-  X.fillText('◀',jx-16,jy+3);X.fillText('▶',jx+16,jy+3);
-
-  // Right zone — attack button
-  const ax=RW-28, ay=RH-26;
-  X.fillStyle=atkBtn.active?'rgba(180,40,40,.6)':'rgba(140,20,20,.35)';
-  X.beginPath();X.arc(ax,ay,18,0,Math.PI*2);X.fill();
-  X.strokeStyle='rgba(255,80,80,.45)';X.lineWidth=1.5;
-  X.beginPath();X.arc(ax,ay,18,0,Math.PI*2);X.stroke();
-  X.font='bold 6px monospace';X.textAlign='center';X.fillStyle='rgba(255,180,180,.85)';
-  X.fillText('HIT',ax,ay+2);
-
-  // Subtle zone divider
-  X.strokeStyle='rgba(255,255,255,.05)';X.lineWidth=1;X.setLineDash([3,4]);
-  X.beginPath();X.moveTo(RW/2,RH-55);X.lineTo(RW/2,RH);X.stroke();
-  X.setLineDash([]);
-}
-
-// ── Intro narrative overlay ───────────────────────────────────
 function drawIntro(){
-  X.fillStyle='rgba(0,0,0,.82)';X.fillRect(0,0,RW,RH);
+  X.fillStyle='rgba(0,0,0,.88)'; X.fillRect(0,0,RW,RH);
   const lv=LEVELS[currentLevel];
-  const lines=[
-    {t:'You open your eyes.',          c:'#ccbbaa',s:'6px monospace',      y:26},
-    {t:`LEVEL ${currentLevel+1}`,       c:'#ffdd44',s:'bold 12px monospace',y:44},
-    {t:lv.name,                         c:'#cc8844',s:'bold 8px monospace', y:58},
-    {t:'────────────',                  c:'#332211',s:'6px monospace',      y:70},
-    {t:`${lv.enemyDefs.length} creatures patrol these halls.`,
-                                        c:'#cc6644',s:'bold 6px monospace', y:84},
-    {t:'Find the KEY. Unlock the door.',c:'#ccaa66',s:'6px monospace',      y:98},
-    {t:'Reach the EXIT.',               c:'#ccaa66',s:'6px monospace',      y:110},
-    {t:'────────────',                  c:'#332211',s:'6px monospace',      y:122},
-    {t:'DRAG LEFT  →  Move & Turn',     c:'#7799bb',s:'6px monospace',      y:147},
-    {t:'TAP RIGHT  →  Shoot',           c:'#7799bb',s:'6px monospace',      y:159},
-    {t:'Walk over items to pick up',    c:'#7799bb',s:'6px monospace',      y:171},
-  ];
-  lines.forEach(l=>{X.font=l.s;X.textAlign='center';X.fillStyle=l.c;X.fillText(l.t,RW/2,l.y);});
+  X.textAlign='center';
+  X.font='18px monospace';       X.fillStyle='#ccbbaa'; X.fillText('You open your eyes.',RW/2,RH*0.18);
+  X.font='bold 38px monospace';  X.fillStyle='#ffdd44'; X.fillText(`LEVEL ${currentLevel+1}`,RW/2,RH*0.30);
+  X.font='bold 22px monospace';  X.fillStyle='#cc8844'; X.fillText(lv.name,RW/2,RH*0.40);
+  X.fillStyle='#332211'; X.fillRect(RW/2-80,RH*0.44,160,2);
+  X.font='bold 16px monospace';  X.fillStyle='#cc6644';
+  X.fillText(`${lv.enemyDefs.length} creatures patrol these halls.`,RW/2,RH*0.52);
+  X.font='16px monospace';       X.fillStyle='#ccaa66';
+  X.fillText('Find the KEY.  Unlock the door.  Reach the EXIT.',RW/2,RH*0.60);
+  X.fillStyle='#332211'; X.fillRect(RW/2-80,RH*0.65,160,2);
+  X.font='15px monospace';       X.fillStyle='#7799bb';
+  X.fillText('W A S D / Arrow Keys — Move & Turn',RW/2,RH*0.72);
+  X.fillText('CLICK / SPACE — Shoot',RW/2,RH*0.79);
   const pu=(Math.sin(Date.now()/500)+1)/2;
-  X.globalAlpha=.4+pu*.55;
-  X.font='bold 6px monospace';X.fillStyle='#997755';X.textAlign='center';
-  X.fillText('▶  TAP or SPACE to begin  ◀',RW/2,182);
+  X.globalAlpha=.45+pu*.5;
+  X.font='bold 18px monospace';  X.fillStyle='#997755';
+  X.fillText('▶  CLICK or SPACE to begin  ◀',RW/2,RH*0.90);
   X.globalAlpha=1;
 }
 
 function drawPause(){
-  X.fillStyle='rgba(0,0,0,.7)';X.fillRect(0,0,RW,RH);
-  X.font='bold 10px monospace';X.textAlign='center';
-  X.fillStyle='#aa8866';X.fillText('PAUSED',RW/2,RH/2-4);
-  X.font='5px monospace';X.fillStyle='#665544';
-  X.fillText('P to resume',RW/2,RH/2+10);
+  X.fillStyle='rgba(0,0,0,.72)'; X.fillRect(0,0,RW,RH);
+  X.textAlign='center';
+  X.font='bold 52px monospace'; X.fillStyle='#aa8866'; X.fillText('PAUSED',RW/2,RH/2);
+  X.font='18px monospace';      X.fillStyle='#665544'; X.fillText('P  —  resume',RW/2,RH/2+40);
 }
 
 requestAnimationFrame(ts=>{lt=ts;requestAnimationFrame(loop);});
