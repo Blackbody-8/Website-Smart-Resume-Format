@@ -5,5 +5,5 @@ Allow: /
 Disallow: /admin/
 Disallow: /private/
 
-# Sitemap location — update this to your actual domain
+# Sitemap location 
 Sitemap: https://smartresumeformat.com/sitemap.xml
