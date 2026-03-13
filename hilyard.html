@@ -327,6 +327,221 @@ const LEVELS=[
     {wx:5.0,wy:10.5},{wx:7.5,wy:11.0},
   ],
   },
+  {
+  // ── LEVEL 3 : CARDIOVASCULAR UNIT ──────────────────────────
+  // Two cath labs flanking a central monitoring bay + stairwell corridor
+  // Wall tile type 6 (blue-white sterile tile, reused as cath-lab aesthetic)
+  name:'CARDIOVASCULAR UNIT',
+  map:[
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,1], // north corridor wall
+    [1,6,0,0,0,0,6,0,0,0,0,0,6,0,0,0,0,6,0,0,0,0,6,1], // 4 waiting bays
+    [1,6,0,0,0,0,6,0,0,0,0,0,6,0,0,0,0,6,0,0,0,0,6,1],
+    [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1], // open waiting area
+    [1,6,6,6,0,6,6,6,6,0,6,6,6,6,0,6,6,6,6,0,6,6,6,1], // 4 doorways south
+    [1,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1],
+    [1,6,6,6,0,6,6,6,6,0,6,6,6,6,0,6,6,6,6,0,6,6,6,1],
+    [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1], // central monitoring floor
+    [1,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1],
+    [1,6,6,6,6,6,0,6,6,6,6,6,6,6,6,6,6,6,0,6,6,6,6,1], // split — 2 cath lab doors at 6,18
+    [1,6,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,6,1], // cath labs (wall divider col 11)
+    [1,6,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,6,1],
+    [1,6,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,6,1],
+    [1,6,6,6,6,6,6,6,6,6,6,6,6,6,2,6,6,6,6,6,6,6,6,1], // south wall + locked door col 14
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  ],
+  playerStart:{x:11.5,y:3.0,angle:Math.PI/2},
+  lights:[
+    {x:3,y:3},{x:9,y:3},{x:15,y:3},{x:20,y:3},   // waiting bay overheads
+    {x:6,y:9},{x:17,y:9},{x:11,y:8},              // monitoring bay
+    {x:5,y:12},{x:17,y:12},                        // cath lab pools
+  ],
+  enemyDefs:[
+    {x:3.5, y:3.5, health:3,state:'patrol',patrolAngle:0},
+    {x:19.5,y:3.5, health:3,state:'idle',  patrolAngle:Math.PI},
+    {x:9.5, y:3.5, health:3,state:'patrol',patrolAngle:Math.PI},
+    {x:5.5, y:9.0, health:3,state:'patrol',patrolAngle:Math.PI/2},
+    {x:17.5,y:9.0, health:3,state:'idle',  patrolAngle:0},
+    {x:5.5, y:13.0,health:3,state:'patrol',patrolAngle:Math.PI*1.5},
+    {x:18.5,y:13.0,health:3,state:'idle',  patrolAngle:0},
+    {x:11.5,y:12.5,health:3,state:'patrol',patrolAngle:Math.PI},
+  ],
+  itemDefs:[
+    {type:'key',   x:5.5, y:12.5},
+    {type:'health',x:9.5, y:4.0},
+    {type:'health',x:19.5,y:9.0},
+  ],
+  signDefs:[
+    {wx:11.5,wy:1.5, label:'CARDIOVASCULAR\nUNIT',  col:'#0a1a2e'},
+    {wx:5.5, wy:7.5, label:'CATH LAB 1',             col:'#0a1e1a'},
+    {wx:18.5,wy:7.5, label:'CATH LAB 2',             col:'#0a1e1a'},
+    {wx:11.5,wy:10.8,label:'MONITORING\nBAY',        col:'#0a1e1a'},
+  ],
+  propDefs:[
+    // Waiting bays
+    {type:'bed',    x:3.5, y:2.5, solid:true},
+    {type:'corpse', x:3.5, y:2.5, solid:false},
+    {type:'bed',    x:9.5, y:2.5, solid:true},
+    {type:'corpse', x:9.5, y:2.5, solid:false},
+    {type:'bed',    x:15.5,y:2.5, solid:true},
+    {type:'bed',    x:20.5,y:2.5, solid:true},
+    {type:'corpse', x:20.5,y:2.5, solid:false},
+    {type:'monitor',x:4.5, y:2.2, solid:false},
+    {type:'monitor',x:10.5,y:2.2, solid:false},
+    {type:'monitor',x:16.5,y:2.2, solid:false},
+    // Central monitoring bank — row of monitors
+    {type:'desk',   x:7.5, y:8.5, solid:true},
+    {type:'monitor',x:6.5, y:8.2, solid:false},
+    {type:'monitor',x:7.5, y:8.2, solid:false},
+    {type:'monitor',x:8.5, y:8.2, solid:false},
+    {type:'desk',   x:15.5,y:8.5, solid:true},
+    {type:'monitor',x:14.5,y:8.2, solid:false},
+    {type:'monitor',x:15.5,y:8.2, solid:false},
+    {type:'monitor',x:16.5,y:8.2, solid:false},
+    // Cath lab 1 (left side, cols 2-10)
+    {type:'or_table',x:5.5, y:12.0,solid:true},
+    {type:'corpse',  x:5.5, y:12.0,solid:false},
+    {type:'or_lamp', x:5.5, y:12.0,solid:false},
+    {type:'cart',    x:3.5, y:11.5,solid:false},
+    {type:'cart',    x:3.5, y:13.0,solid:false},
+    {type:'monitor', x:2.5, y:12.0,solid:false},
+    // Cath lab 2 (right side, cols 12-22)
+    {type:'or_table',x:17.5,y:12.0,solid:true},
+    {type:'corpse',  x:17.5,y:12.0,solid:false},
+    {type:'or_lamp', x:17.5,y:12.0,solid:false},
+    {type:'cart',    x:19.5,y:11.5,solid:false},
+    {type:'cart',    x:19.5,y:13.0,solid:false},
+    {type:'monitor', x:21.5,y:12.0,solid:false},
+    // ECG / defibrillator cart centre
+    {type:'cart',    x:11.5,y:8.8, solid:false},
+    // Shadow figures
+    {type:'shadow_figure',x:11.5,y:6.5, solid:false},
+    {type:'shadow_figure',x:11.5,y:13.5,solid:false},
+    {type:'shadow_figure',x:2.5, y:13.5,solid:false},
+  ],
+  stainDefs:[
+    {wx:5.0,wy:12.5},{wx:6.0,wy:12.0},{wx:4.5,wy:13.0},{wx:5.5,wy:11.0},
+    {wx:17.0,wy:12.5},{wx:18.0,wy:12.0},{wx:16.5,wy:13.0},
+    {wx:3.5, wy:3.5},{wx:9.5, wy:3.5},
+  ],
+  },
+  {
+  // ── LEVEL 4 : RADIOLOGY ──────────────────────────────────────
+  // Waiting area → X-ray imaging rooms → CT scanner bay → dark film storage
+  // Type 8 (dark concrete) — lead-lined walls, minimal lighting, lightboxes
+  name:'RADIOLOGY',
+  map:[
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,1],
+    [1,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,1], // waiting area
+    [1,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,1],
+    [1,9,9,9,0,9,9,9,9,9,9,0,9,9,9,9,9,9,0,9,9,9,9,1], // 3 doors to xray rooms
+    [1,9,0,0,0,0,0,9,0,0,0,0,0,9,0,0,0,0,0,9,0,0,9,1], // 3 xray bays (dividers)
+    [1,9,0,0,0,0,0,9,0,0,0,0,0,9,0,0,0,0,0,9,0,0,9,1],
+    [1,9,9,9,9,9,9,9,0,9,9,9,9,9,0,9,9,9,9,9,0,9,9,1], // south xray wall — 3 exits
+    [1,9,9,9,9,9,9,9,0,9,9,9,9,9,0,9,9,9,9,9,0,9,9,1],
+    [1,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,1], // CT scanner bay (wide open)
+    [1,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,1],
+    [1,9,9,9,9,9,9,0,9,9,9,9,9,9,9,9,9,0,9,9,9,9,9,1], // scanner room wall — 2 doors
+    [1,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,1], // film archive — dark back rooms
+    [1,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,1],
+    [1,9,9,9,9,9,9,9,9,9,9,2,9,9,9,9,9,9,9,9,9,9,9,1], // locked door col 11
+    [1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  ],
+  playerStart:{x:11.5,y:3.0,angle:Math.PI/2},
+  lights:[
+    {x:5, y:3},{x:18,y:3},                          // waiting area — faint overhead
+    {x:3, y:5},{x:10,y:5},{x:17,y:5},               // xray bay lights (dim)
+    {x:7, y:9},{x:15,y:9},                           // CT bay
+    {x:5, y:12},{x:18,y:12},                         // archive
+  ],
+  enemyDefs:[
+    {x:5.5, y:3.0, health:3,state:'patrol',patrolAngle:0},
+    {x:18.5,y:3.0, health:3,state:'idle',  patrolAngle:Math.PI},
+    {x:3.5, y:6.0, health:3,state:'patrol',patrolAngle:Math.PI/2},
+    {x:10.5,y:5.5, health:3,state:'idle',  patrolAngle:0},
+    {x:17.5,y:6.0, health:3,state:'patrol',patrolAngle:Math.PI*1.5},
+    {x:6.5, y:10.0,health:4,state:'patrol',patrolAngle:Math.PI},
+    {x:16.5,y:10.0,health:4,state:'idle',  patrolAngle:0},
+    {x:5.5, y:13.0,health:4,state:'patrol',patrolAngle:Math.PI*1.5},
+    {x:18.5,y:13.0,health:4,state:'idle',  patrolAngle:Math.PI},
+    {x:11.5,y:12.5,health:4,state:'patrol',patrolAngle:Math.PI/2},
+  ],
+  itemDefs:[
+    {type:'key',   x:4.5, y:13.0},
+    {type:'health',x:18.5,y:3.0},
+    {type:'health',x:3.5, y:10.0},
+    {type:'health',x:20.5,y:13.0},
+  ],
+  signDefs:[
+    {wx:11.5,wy:1.5, label:'RADIOLOGY\nIMAGING',      col:'#0e1a2e'},
+    {wx:3.5, wy:4.5, label:'X-RAY 1',                  col:'#0e1a1a'},
+    {wx:10.5,wy:4.5, label:'X-RAY 2',                  col:'#0e1a1a'},
+    {wx:17.5,wy:4.5, label:'X-RAY 3',                  col:'#0e1a1a'},
+    {wx:11.5,wy:10.8,label:'CT SCANNER',               col:'#0e1a2e'},
+    {wx:11.5,wy:11.8,label:'FILM ARCHIVE\nNO ENTRY',   col:'#2e0a0a'},
+  ],
+  propDefs:[
+    // Waiting chairs (beds reused)
+    {type:'bed',    x:4.5, y:2.5, solid:true},
+    {type:'bed',    x:8.5, y:2.5, solid:true},
+    {type:'bed',    x:14.5,y:2.5, solid:true},
+    {type:'bed',    x:18.5,y:2.5, solid:true},
+    {type:'corpse', x:8.5, y:2.5, solid:false},
+    // X-ray tables in each bay
+    {type:'or_table',x:3.5, y:5.5, solid:true},
+    {type:'corpse',  x:3.5, y:5.5, solid:false},
+    {type:'or_lamp', x:3.5, y:5.5, solid:false},
+    {type:'or_table',x:10.5,y:5.5, solid:true},
+    {type:'or_lamp', x:10.5,y:5.5, solid:false},
+    {type:'or_table',x:17.5,y:5.5, solid:true},
+    {type:'corpse',  x:17.5,y:5.5, solid:false},
+    {type:'or_lamp', x:17.5,y:5.5, solid:false},
+    // Monitor banks — lightbox displays
+    {type:'monitor',x:2.5, y:5.5, solid:false},
+    {type:'monitor',x:5.5, y:5.5, solid:false},
+    {type:'monitor',x:9.5, y:5.5, solid:false},
+    {type:'monitor',x:11.5,y:5.5, solid:false},
+    {type:'monitor',x:16.5,y:5.5, solid:false},
+    {type:'monitor',x:19.5,y:5.5, solid:false},
+    // CT scanner — large table in centre bay
+    {type:'or_table',x:7.5, y:9.8, solid:true},
+    {type:'or_lamp', x:7.5, y:9.8, solid:false},
+    {type:'or_table',x:15.5,y:9.8, solid:true},
+    {type:'corpse',  x:15.5,y:9.8, solid:false},
+    {type:'or_lamp', x:15.5,y:9.8, solid:false},
+    {type:'monitor', x:11.5,y:9.0, solid:false},
+    {type:'monitor', x:12.5,y:9.0, solid:false},
+    {type:'cart',    x:3.5, y:9.5, solid:false},
+    {type:'cart',    x:20.5,y:9.5, solid:false},
+    // Film archive — dark back room, carts of film
+    {type:'cart',    x:3.5, y:12.5,solid:false},
+    {type:'cart',    x:7.5, y:12.5,solid:false},
+    {type:'cart',    x:14.5,y:12.5,solid:false},
+    {type:'cart',    x:19.5,y:12.5,solid:false},
+    {type:'cart',    x:11.5,y:13.5,solid:false},
+    {type:'corpse',  x:5.5, y:13.0,solid:false},
+    // Shadow figures
+    {type:'shadow_figure',x:11.5,y:7.5, solid:false},
+    {type:'shadow_figure',x:2.5, y:13.5,solid:false},
+    {type:'shadow_figure',x:21.5,y:13.5,solid:false},
+    {type:'shadow_figure',x:11.5,y:3.8, solid:false},
+  ],
+  stainDefs:[
+    // X-ray room 1
+    {wx:3.0,wy:6.0},{wx:4.0,wy:5.5},{wx:3.5,wy:6.5},
+    // X-ray room 3
+    {wx:17.0,wy:6.0},{wx:18.0,wy:5.5},
+    // CT bay
+    {wx:15.0,wy:10.5},{wx:16.0,wy:9.5},{wx:14.5,wy:10.0},
+    // Archive trails
+    {wx:5.5,wy:12.5},{wx:6.0,wy:13.0},{wx:11.5,wy:12.0},
+  ],
+  },
 ];
 
 let currentLevel=0;
@@ -337,7 +552,7 @@ function mapAt(x,y){
   if(mx<0||mx>=MAPW||my<0||my>=MAPH)return 1;
   return MAP[my][mx];
 }
-function isWall(x,y){const c=mapAt(x,y);return c===1||c===2||c===6||c===7||c===8;}
+function isWall(x,y){const c=mapAt(x,y);return c===1||c===2||c===6||c===7||c===8||c===9;}
 
 // Wall texture colours — PS1 flat-shaded
 const WALL_COLS=[
@@ -502,8 +717,102 @@ const TEX_DOOR=mkTex((ox,SZ)=>{
   ox.putImageData(id,0,0);
 });
 
+// ── Texture 6: RADIOLOGY wall (type 9 — cool blue-grey lead-lined tile) ──
+const TEX_RADIO=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  const TW=24,TH=24;
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const tx=x%TW, ty=y%TH;
+    const tc=Math.floor(x/TW), tr=Math.floor(y/TH);
+    const isGrout=tx<2||ty<2;
+    const stain=snoise(tc,tr,71); const noise1=fbm(x/6,y/6,83,3);
+    const damaged=stain<0.30; // fewer damaged tiles — clinical look
+    let r,g,b;
+    if(isGrout){r=22;g=28;b=38;} // dark blue-grey grout
+    else if(damaged){
+      const dv=0.3+noise1*0.3;
+      r=Math.floor((50+noise1*20)*dv); g=Math.floor((58+noise1*22)*dv); b=Math.floor((75+noise1*28)*dv);
+    } else {
+      // Clean cool white tile with slight blue cast — clinical, sterile
+      const base=0.60+noise1*0.22;
+      r=Math.floor(Math.min(255,175*base));
+      g=Math.floor(Math.min(255,185*base));
+      b=Math.floor(Math.min(255,205*base));
+    }
+    d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// ── Texture 7: FLOOR — hospital vinyl linoleum ────────────────────
+// Classic large-format tiles — off-white + occasional dark accent square
+const TEX_FLOOR=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  const TW=32,TH=32; // large floor tiles
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const tx=x%TW, ty=y%TH;
+    const tc=Math.floor(x/TW), tr=Math.floor(y/TH);
+    const isGrout=tx<3||ty<3;
+    // Checkerboard accent — every 3rd tile in each axis is dark green
+    const isDark=((tc%3===0)&&(tr%3===0));
+    const noise1=fbm(x/8,y/8,91,3);
+    const scuff=snoise(tc*3+tx,tr*3+ty,55);
+    let r,g,b;
+    if(isGrout){r=38;g=42;b=36;}
+    else if(isDark){
+      // Dark green accent tile — classic hospital floor
+      const base=0.35+noise1*0.2;
+      r=Math.floor(40*base); g=Math.floor(62*base); b=Math.floor(48*base);
+    } else {
+      // Off-white main tile with scuff marks
+      const base=0.62+noise1*0.20;
+      const scuffAmt=scuff>0.85?0.78:1.0;
+      r=Math.floor(Math.min(255,195*base*scuffAmt));
+      g=Math.floor(Math.min(255,192*base*scuffAmt));
+      b=Math.floor(Math.min(255,178*base*scuffAmt));
+    }
+    d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
+// ── Texture 8: CEILING — dropped acoustic tile grid ───────────────
+const TEX_CEIL=mkTex((ox,SZ)=>{
+  const id=ox.createImageData(SZ,SZ); const d=id.data;
+  const TW=40,TH=40; // large suspended ceiling panels
+  for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+    const i=(y*SZ+x)*4;
+    const tx=x%TW, ty=y%TH;
+    const tc=Math.floor(x/TW), tr=Math.floor(y/TH);
+    const isFrame=tx<2||ty<2||tx>=TW-1||ty>=TH-1;
+    const noise1=fbm(x/9,y/9,37,3);
+    const stain=snoise(tc,tr,14);
+    const isStained=stain<0.25;
+    let r,g,b;
+    if(isFrame){
+      // Metal grid frame — medium grey
+      r=105;g=108;b=100;
+    } else if(isStained){
+      // Water stain — brownish patch
+      const sv=0.55+noise1*0.25;
+      r=Math.floor(148*sv); g=Math.floor(138*sv); b=Math.floor(110*sv);
+    } else {
+      // Acoustic tile — slightly textured off-white
+      const base=0.72+noise1*0.18;
+      r=Math.floor(Math.min(255,210*base));
+      g=Math.floor(Math.min(255,208*base));
+      b=Math.floor(Math.min(255,200*base));
+    }
+    d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  }
+  ox.putImageData(id,0,0);
+});
+
 // Texture lookup table by wall type
-const WALL_TEX=[null,TEX_CORR,TEX_DOOR,null,null,null,TEX_OR,TEX_WARD,TEX_MORGUE];
+// type 9 = radiology blue tile (mapped via level wallOverride)
+const WALL_TEX=[null,TEX_CORR,TEX_DOOR,null,null,null,TEX_OR,TEX_WARD,TEX_MORGUE,TEX_RADIO];
 
 // Fast texture sampler — bilinear for close walls, nearest for far
 function sampleTex(tex,u,v){
@@ -914,9 +1223,9 @@ function detectRoom(){
   let rtype=0;
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
     const c=mapAt(mx+dx,my+dy);
-    if(c>=6&&c<=8)rtype=Math.max(rtype,c);
+    if(c>=6&&c<=9)rtype=Math.max(rtype,c);
   }
-  lastRoomType=rtype; // silently update for ceiling/floor tinting only
+  lastRoomType=rtype;
 }
 
 function startGame(){
@@ -1205,8 +1514,9 @@ function drawWorld(){
     buf[i]=r; buf[i+1]=g; buf[i+2]=b; buf[i+3]=255;
   }
 
-  const floorTex = roomT===6?TEX_OR:roomT===7?TEX_WARD:roomT===8?TEX_MORGUE:TEX_CORR;
-  const ceilR    = roomT===8?[12,14,22]:roomT===6?[20,18,14]:[18,16,13];
+  const floorTex = TEX_FLOOR;  // same vinyl floor throughout — hospital consistency
+  // Ceiling tint varies by room; TEX_CEIL is the base acoustic tile texture
+  const ceilTint = roomT===8?[14,16,24]:roomT===9?[16,20,30]:roomT===6?[22,20,16]:[20,20,18];
 
   const cosA=Math.cos(player.angle), sinA=Math.sin(player.angle);
   const cpX=-sinA*0.66, cpY=cosA*0.66;
@@ -1221,9 +1531,10 @@ function drawWorld(){
       const tx=((((fX*0.5)%1)+1)%1*(TEX_SIZE-1))|0;
       const ty=((((fY*0.5)%1)+1)%1*(TEX_SIZE-1))|0;
       const idx=(ty*TEX_SIZE+tx)*4;
-      putPx(x,y,(TEX_CORR[idx]*0.16*fade+ceilR[0]*fade)|0,
-               (TEX_CORR[idx+1]*0.16*fade+ceilR[1]*fade)|0,
-               (TEX_CORR[idx+2]*0.16*fade+ceilR[2]*fade)|0);
+      putPx(x,y,
+        Math.min(255,(TEX_CEIL[idx]*0.55*fade+ceilTint[0]*fade*0.5)|0),
+        Math.min(255,(TEX_CEIL[idx+1]*0.55*fade+ceilTint[1]*fade*0.5)|0),
+        Math.min(255,(TEX_CEIL[idx+2]*0.55*fade+ceilTint[2]*fade*0.5)|0));
       fX+=stX; fY+=stY;
     }
   }
@@ -1284,7 +1595,7 @@ function drawWorld(){
     for(let i=0;i<64;i++){
       if(sX<sY){sX+=dX;mX+=stepX;side=0;}else{sY+=dY;mY+=stepY;side=1;}
       const cv=mapAt(mX,mY);
-      if(cv===1||cv===2||cv===3||cv===6||cv===7||cv===8){wType=cv;break;}
+      if(cv===1||cv===2||cv===3||cv===6||cv===7||cv===8||cv===9){wType=cv;break;}
     }
     const dist=Math.max(0.01, side===0?sX-dX:sY-dY);
     const wallX=((side===0?(player.y+dist*rdy):(player.x+dist*rdx))%1+1)%1;
@@ -2155,8 +2466,8 @@ function drawTitle(){
   // Story
   X.font='15px monospace';
   const story=[
-    'The hospital has been dark for three days.',
-    'You went in looking for your sister.',
+    'The hospital has been abandoned.',
+    'You went in looking for your prescriptions.',
     'Something found you first.',
   ];
   story.forEach((t,i)=>{
