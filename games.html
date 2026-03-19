@@ -7,7 +7,6 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-K9J4ZPWL6S');
 </script>
 <meta charset="UTF-8">
@@ -16,114 +15,71 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#07030f;color:#ddd;font-family:'Barlow',sans-serif;min-height:100vh;
-     display:flex;flex-direction:column}
-
-nav{width:100%;display:flex;justify-content:space-between;align-items:center;
-    padding:.7rem 4%;background:#0d0820;border-bottom:2px solid #3a1a6e}
-.logo{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;
-      color:#e8d87a;text-decoration:none;letter-spacing:.05em}
-.nav-btn{background:#b01010;color:#fff;padding:.38rem 1rem;text-decoration:none;
-         font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;
-         border:1px solid #e03030;letter-spacing:.04em}
+body{background:#07030f;color:#ddd;font-family:'Barlow',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+nav{width:100%;display:flex;justify-content:space-between;align-items:center;padding:.7rem 4%;background:#0d0820;border-bottom:2px solid #3a1a6e}
+.logo{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;color:#e8d87a;text-decoration:none;letter-spacing:.05em}
+.nav-btn{background:#b01010;color:#fff;padding:.38rem 1rem;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;border:1px solid #e03030;letter-spacing:.04em}
 .nav-btn:hover{background:#d01414}
-
 main{flex:1;max-width:860px;width:100%;margin:0 auto;padding:3rem 1.5rem 4rem}
-
 .page-header{margin-bottom:2.8rem;border-bottom:1px solid #2a1460;padding-bottom:1.6rem}
-.page-header h1{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:800;
-                color:#e8d87a;letter-spacing:.06em;margin-bottom:.4rem}
+.page-header h1{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:800;color:#e8d87a;letter-spacing:.06em;margin-bottom:.4rem}
 .page-header p{font-size:1rem;color:#8880aa;font-family:'Barlow',sans-serif}
-
-/* Game table */
 .game-table{width:100%;border-collapse:collapse}
 .game-table thead tr{background:#110830;border-bottom:2px solid #3a1a6e}
-.game-table th{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:700;
-               color:#9977cc;letter-spacing:.08em;text-transform:uppercase;
-               padding:.65rem 1.1rem;text-align:left}
+.game-table th{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:700;color:#9977cc;letter-spacing:.08em;text-transform:uppercase;padding:.65rem 1.1rem;text-align:left}
 .game-table tbody tr{border-bottom:1px solid #1e0e40;transition:background .15s}
 .game-table tbody tr:hover{background:rgba(80,40,160,.18)}
 .game-table td{padding:1.1rem 1.1rem;vertical-align:middle}
-
-.game-name{font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:800;
-           color:#fff;letter-spacing:.03em;display:block;margin-bottom:.2rem}
+.game-name{font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:800;color:#fff;letter-spacing:.03em;display:block;margin-bottom:.2rem}
 .game-desc{font-size:.92rem;color:#9990b8;line-height:1.45}
-
-.play-btn{display:inline-block;background:#b01010;color:#fff;padding:.42rem 1.2rem;
-          text-decoration:none;font-family:'Barlow Condensed',sans-serif;
-          font-weight:700;font-size:1rem;letter-spacing:.05em;
-          border:1px solid #e03030;white-space:nowrap;transition:background .15s}
+.play-btn{display:inline-block;background:#b01010;color:#fff;padding:.42rem 1.2rem;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;letter-spacing:.05em;border:1px solid #e03030;white-space:nowrap;transition:background .15s}
 .play-btn:hover{background:#d41414}
-
-footer{background:#07040f;border-top:1px solid #1a0840;padding:1.2rem;
-       text-align:center;color:#444;font-family:'Barlow',sans-serif;font-size:.75rem}
+footer{background:#07040f;border-top:1px solid #1a0840;padding:1.2rem;text-align:center;color:#444;font-family:'Barlow',sans-serif;font-size:.75rem}
 footer a{color:#666;margin:0 8px;text-decoration:none}
 footer a:hover{color:#e8d87a}
 </style>
 </head>
 <body>
-
 <nav>
   <a href="https://smartresumeformat.com" class="logo">Smart Resume Format</a>
   <a href="https://smartresumeformat.pythonanywhere.com" class="nav-btn">Build Resume</a>
 </nav>
-
 <main>
   <div class="page-header">
     <h1>GAMES</h1>
     <p>Free in-browser games — no download, no install, just play.</p>
   </div>
-
   <table class="game-table">
     <thead>
-      <tr>
-        <th>Game</th>
-        <th>Description</th>
-        <th></th>
-      </tr>
+      <tr><th>Game</th><th>Description</th><th></th></tr>
     </thead>
     <tbody>
       <tr>
-        <td>
-          <span class="game-name">Coach Johnson's Football USA</span>
-        </td>
-        <td>
-          <span class="game-desc">An in-browser football game for desktop and mobile.</span>
-        </td>
-        <td>
-          <a href="https://smartresumeformat.com/football" class="play-btn">▶ PLAY</a>
-        </td>
+        <td><span class="game-name">Coach Johnson's Football USA</span></td>
+        <td><span class="game-desc">An in-browser football game for desktop and mobile.</span></td>
+        <td><a href="https://smartresumeformat.com/football" class="play-btn">▶ PLAY</a></td>
       </tr>
       <tr>
-        <td>
-          <span class="game-name">Ty's Curling</span>
-        </td>
-        <td>
-          <span class="game-desc">USA vs Canada curling — a PS1-inspired in-browser curling game for desktop and mobile.</span>
-        </td>
-        <td>
-          <a href="https://smartresumeformat.com/curling" class="play-btn">▶ PLAY</a>
-        </td>
+        <td><span class="game-name">Ty's Curling</span></td>
+        <td><span class="game-desc">USA vs Canada curling — a PS1-inspired in-browser curling game for desktop and mobile.</span></td>
+        <td><a href="https://smartresumeformat.com/curling" class="play-btn">▶ PLAY</a></td>
       </tr>
       <tr>
-        <td>
-          <span class="game-name">Hilyard Street Hospital</span>
-        </td>
-        <td>
-          <span class="game-desc">A first-person survival horror game in an abandoned hospital. 5 levels, a silenced pistol, and something in the dark. For desktop and mobile.</span>
-        </td>
-        <td>
-          <a href="https://smartresumeformat.com/hilyard" class="play-btn">▶ PLAY</a>
-        </td>
+        <td><span class="game-name">Hilyard Street Hospital</span></td>
+        <td><span class="game-desc">A first-person survival horror game in an abandoned hospital. 5 levels, a silenced pistol, and something in the dark. For desktop and mobile.</span></td>
+        <td><a href="https://smartresumeformat.com/hilyard" class="play-btn">▶ PLAY</a></td>
+      </tr>
+      <tr>
+        <td><span class="game-name">Above Hell: Beneath VT</span></td>
+        <td><span class="game-desc">Explore the real steam tunnels beneath Virginia Tech. Beware of rats, escaped demons with flashlights, and scalding hot pipes. For desktop.</span></td>
+        <td><a href="https://smartresumeformat.com/abovehell" class="play-btn">▶ PLAY</a></td>
       </tr>
     </tbody>
   </table>
 </main>
-
 <footer>
   <a href="privacy.html">Privacy</a> | <a href="terms.html">Terms</a> | <a href="support.html">Support</a><br><br>
   &copy; 2026 Smart Resume Format. All rights reserved.
 </footer>
-
 </body>
 </html>
