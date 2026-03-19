@@ -69,6 +69,68 @@ const S={TITLE:0,PLAY:1,DEAD:2,WIN:3,LEVELUP:4};
 // ── INPUT ──────────────────────────────────────────────────
 const keys={};
 let mouseX=RW/2,mouseY=RH/2;
+
+// ── TOUCH / MOBILE INPUT ────────────────────────────────────
+const isMobile=()=>('ontouchstart' in window)||navigator.maxTouchPoints>0;
+const touch={
+  joy:{active:false,id:-1,bx:0,by:0,dx:0,dy:0}, // left joystick
+  aim:{active:false,id:-1,x:RW/2,y:RH/2},        // right side aim
+};
+const JOY_R=55, JOY_DEAD=8; // joystick base radius, deadzone
+
+function canvasPos(e,touch){
+  const r=C.getBoundingClientRect();
+  return{x:(touch.clientX-r.left)*(RW/r.width), y:(touch.clientY-r.top)*(RH/r.height)};
+}
+
+C.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(state===S.TITLE||state===S.DEAD||state===S.WIN){initAudio();startGame();return;}
+  if(state===S.LEVELUP){nextLevel();return;}
+  for(const t of e.changedTouches){
+    const p=canvasPos(e,t);
+    if(p.x<RW/2){
+      // Left half → joystick
+      if(!touch.joy.active){
+        touch.joy.active=true;touch.joy.id=t.identifier;
+        touch.joy.bx=p.x;touch.joy.by=p.y;touch.joy.dx=0;touch.joy.dy=0;
+      }
+    } else {
+      // Right half → aim + attack
+      if(!touch.aim.active){
+        touch.aim.active=true;touch.aim.id=t.identifier;
+        touch.aim.x=p.x;touch.aim.y=p.y;
+        mouseX=p.x;mouseY=p.y;
+        tryAttack();
+      }
+    }
+  }
+},{passive:false});
+
+C.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier===touch.joy.id){
+      const p=canvasPos(e,t);
+      touch.joy.dx=p.x-touch.joy.bx;
+      touch.joy.dy=p.y-touch.joy.by;
+    }
+    if(t.identifier===touch.aim.id){
+      const p=canvasPos(e,t);
+      touch.aim.x=p.x;touch.aim.y=p.y;
+      mouseX=p.x;mouseY=p.y;
+    }
+  }
+},{passive:false});
+
+C.addEventListener('touchend',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier===touch.joy.id){touch.joy.active=false;touch.joy.dx=0;touch.joy.dy=0;}
+    if(t.identifier===touch.aim.id){touch.aim.active=false;}
+  }
+},{passive:false});
+
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
@@ -82,6 +144,7 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{keys[e.code]=false;});
 C.addEventListener('mousemove',e=>{const r=C.getBoundingClientRect();mouseX=(e.clientX-r.left)*(RW/r.width);mouseY=(e.clientY-r.top)*(RH/r.height);});
 C.addEventListener('click',()=>{if(state===S.PLAY)tryAttack();});
+
 
 // ── AUDIO ──────────────────────────────────────────────────
 let audioCtx=null;
@@ -502,6 +565,11 @@ function handleMovement(){
   if(keys['KeyS']||keys['ArrowDown'])  dy+=1;
   if(keys['KeyA']||keys['ArrowLeft'])  dx=-1;
   if(keys['KeyD']||keys['ArrowRight']) dx+=1;
+  // Touch joystick
+  if(touch.joy.active){
+    const jd=Math.hypot(touch.joy.dx,touch.joy.dy);
+    if(jd>JOY_DEAD){dx+=touch.joy.dx/Math.max(jd,JOY_R);dy+=touch.joy.dy/Math.max(jd,JOY_R);}
+  }
 
   const curTile=tAt(player.wx,player.wy);
   const spd=(curTile===T.FLOOD?0.38:1.0)*player.SPD*dt;
@@ -1136,6 +1204,32 @@ function drawLighting(){
   }
 }
 
+// ── MOBILE CONTROLS ───────────────────────────────────────
+function drawMobileControls(){
+  if(!isMobile())return;
+
+  // Left joystick base
+  const bx=touch.joy.active?touch.joy.bx:110;
+  const by=touch.joy.active?touch.joy.by:RH-130;
+  X.globalAlpha=0.28;
+  X.strokeStyle='#c8a040';X.lineWidth=2;
+  X.beginPath();X.arc(bx,by,JOY_R,0,Math.PI*2);X.stroke();
+  // Knob
+  const kd=Math.min(JOY_R,Math.hypot(touch.joy.dx,touch.joy.dy));
+  const ka=Math.atan2(touch.joy.dy,touch.joy.dx);
+  const kx=bx+(touch.joy.active?Math.cos(ka)*kd:0);
+  const ky=by+(touch.joy.active?Math.sin(ka)*kd:0);
+  X.fillStyle='#c8a040';X.beginPath();X.arc(kx,ky,22,0,Math.PI*2);X.fill();
+
+  // Right attack button
+  X.strokeStyle='#c84020';X.lineWidth=2;
+  X.beginPath();X.arc(RW-110,RH-110,44,0,Math.PI*2);X.stroke();
+  X.fillStyle='#c84020';X.beginPath();X.arc(RW-110,RH-110,36,0,Math.PI*2);X.fill();
+  X.globalAlpha=0.7;X.fillStyle='#fff';X.font='bold 18px Share Tech Mono,monospace';X.textAlign='center';
+  X.fillText('ATK',RW-110,RH-104);
+  X.globalAlpha=1;
+}
+
 // ── HUD ──────────────────────────────────────────────────
 function drawHUD(){
   const ld=LEVELS[currentLevel];
@@ -1321,12 +1415,16 @@ function drawTitle(){
   X.fillText("Exploring Virginia Tech's Steam Tunnels and Beyond",RW/2,RH*0.53);
   // Controls
   X.fillStyle='rgba(140,110,50,0.7)';X.font='12px Share Tech Mono,monospace';
-  X.fillText('WASD: MOVE  ·  MOUSE: AIM FLASHLIGHT  ·  CLICK/SPACE: ATTACK',RW/2,RH*0.60);
+  if(isMobile()){
+    X.fillText('LEFT THUMB: MOVE  ·  RIGHT THUMB: AIM + ATTACK',RW/2,RH*0.60);
+  } else {
+    X.fillText('WASD: MOVE  ·  MOUSE: AIM FLASHLIGHT  ·  CLICK/SPACE: ATTACK',RW/2,RH*0.60);
+  }
   X.fillText('Survive all 5 tunnel runs and reach the Power Plant',RW/2,RH*0.655);
   // Blink
   if(Math.floor(gtime*2)%2===0){
     X.fillStyle='#ffc840';X.font='bold 22px Share Tech Mono,monospace';X.textAlign='center';
-    X.fillText('PRESS SPACE OR CLICK TO DESCEND',RW/2,RH*0.75);
+    X.fillText(isMobile()?'TAP TO DESCEND':'PRESS SPACE OR CLICK TO DESCEND',RW/2,RH*0.75);
   }
   // Warning
   X.fillStyle='rgba(180,80,20,0.6)';X.font='10px Share Tech Mono,monospace';X.textAlign='center';
@@ -1395,7 +1493,7 @@ function loop(ts){
   if(state===S.DEAD){
     // Show frozen world underneath
     drawWorld();drawItems();drawSigns();drawEnemies();drawPlayer();drawParticles();
-    drawLighting();drawMinimap();drawHUD();
+    drawLighting();drawMinimap();drawHUD();drawMobileControls();
     drawDead();X.restore();return;
   }
   if(state===S.WIN){drawWin();X.restore();return;}
@@ -1408,7 +1506,7 @@ function loop(ts){
   }
 
   drawWorld();drawItems();drawSigns();drawEnemies();drawPlayer();drawParticles();
-  drawLighting();drawMinimap();drawHUD();
+  drawLighting();drawMinimap();drawHUD();drawMobileControls();
 
   if(state===S.LEVELUP){
     drawLevelUp();
