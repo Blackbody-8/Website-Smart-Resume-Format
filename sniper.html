@@ -93,18 +93,89 @@ C.addEventListener('click',e=>{
   if(gs===ST.TITLE||gs===ST.RESULT||gs===ST.OVER){ advance(); return; }
   if(gs===ST.BRIEF){ startMission(); return; }
   if(gs===ST.PLAY){
-    if(!scoped){ toggleScope(); return; } // left-click scopes in when unscoped
+    if(!scoped){ toggleScope(); return; }
     fire();
   }
 });
 C.addEventListener('wheel',e=>{
   e.preventDefault();
   if(gs!==ST.PLAY) return;
-  if(!scoped){ toggleScope(); return; } // scroll also scopes in
+  if(!scoped){ toggleScope(); return; }
   scopeZoom=Math.max(3,Math.min(10,scopeZoom-Math.sign(e.deltaY)*0.5));
 },{passive:false});
-const keys={};
-let shiftWasUp=true;
+
+// ── TOUCH INPUT ────────────────────────────────────────────────
+// Unscoped : tap = scope in
+// Scoped   : one-finger drag = pan aim | pinch = zoom | tap = fire
+const touch={fingers:{},lastPinchDist:null,dragStart:null,hasDragged:false,holdingBreath:false};
+function tPos(t){const r=C.getBoundingClientRect();return{x:(t.clientX-r.left)*(RW/r.width),y:(t.clientY-r.top)*(RH/r.height)};}
+
+C.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches) touch.fingers[t.identifier]=tPos(t);
+  const n=Object.keys(touch.fingers).length;
+  if(gs===ST.TITLE||gs===ST.RESULT||gs===ST.OVER){advance();return;}
+  if(gs===ST.BRIEF){startMission();return;}
+  if(gs!==ST.PLAY) return;
+  if(n===1){
+    const p=tPos(e.changedTouches[0]);
+    touch.dragStart={id:e.changedTouches[0].identifier,x:p.x,y:p.y,startY:p.y};
+    touch.hasDragged=false; touch.holdingBreath=false;
+  }
+  if(n===2){
+    const ids=Object.keys(touch.fingers);
+    const a=touch.fingers[ids[0]],b=touch.fingers[ids[1]];
+    touch.lastPinchDist=Math.hypot(a.x-b.x,a.y-b.y);
+    if(!scoped) toggleScope();
+  }
+},{passive:false});
+
+C.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches) touch.fingers[t.identifier]=tPos(t);
+  const ids=Object.keys(touch.fingers);
+  if(gs!==ST.PLAY) return;
+  if(ids.length===1&&touch.dragStart&&touch.dragStart.id==ids[0]){
+    const p=touch.fingers[ids[0]];
+    const dx=p.x-touch.dragStart.x,dy=p.y-touch.dragStart.y;
+    const totalUp=touch.dragStart.startY-p.y; // positive = swiped up
+    // Swipe up >30px = hold breath (only works when scoped)
+    if(scoped&&totalUp>30&&!touch.holdingBreath){
+      touch.holdingBreath=true;
+    }
+    if(scoped&&totalUp<10) touch.holdingBreath=false;
+    if(Math.hypot(dx,dy)>5) touch.hasDragged=true;
+    // Only pan aim if not in swipe-up gesture
+    if(scoped&&!touch.holdingBreath){
+      aimX+=dx*0.45; aimY+=dy*0.45;
+      aimX=Math.max(SCENE.courtX+20,Math.min(SCENE.courtX+SCENE.courtW-20,aimX));
+      aimY=Math.max(SCENE.courtY+10,Math.min(SCENE.courtY+SCENE.courtH-10,aimY));
+    }
+    touch.dragStart.x=p.x; touch.dragStart.y=p.y;
+  }
+  if(ids.length>=2){
+    const a=touch.fingers[ids[0]],b=touch.fingers[ids[1]];
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(touch.lastPinchDist!==null&&scoped){
+      scopeZoom=Math.max(3,Math.min(10,scopeZoom+(d-touch.lastPinchDist)*0.04));
+    }
+    touch.lastPinchDist=d; touch.hasDragged=true;
+  }
+},{passive:false});
+
+C.addEventListener('touchend',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches) delete touch.fingers[t.identifier];
+  if(Object.keys(touch.fingers).length===0){touch.lastPinchDist=null;touch.holdingBreath=false;}
+  if(gs!==ST.PLAY){touch.hasDragged=false;touch.dragStart=null;return;}
+  if(!touch.hasDragged){
+    if(!scoped) toggleScope();
+    else fire();
+  }
+  touch.hasDragged=false; touch.dragStart=null;
+},{passive:false});
+
+const keys={}; let shiftWasUp=true;
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='Space'){ e.preventDefault();
@@ -113,10 +184,7 @@ document.addEventListener('keydown',e=>{
     if(gs===ST.PLAY) fire();
   }
   if(e.code==='KeyZ'&&gs===ST.PLAY) toggleScope();
-  // Shift key: tap to toggle scope, hold for breath steadying
-  if((e.code==='ShiftLeft'||e.code==='ShiftRight')&&gs===ST.PLAY&&shiftWasUp){
-    toggleScope(); shiftWasUp=false;
-  }
+  if((e.code==='ShiftLeft'||e.code==='ShiftRight')&&gs===ST.PLAY&&shiftWasUp){toggleScope();shiftWasUp=false;}
 });
 document.addEventListener('keyup',e=>{
   keys[e.code]=false;
@@ -388,7 +456,7 @@ function update(){
   }
 
   // Sway (breath) — applied ON TOP of aim, in screen px
-  const holding=keys['ControlLeft']||keys['ControlRight'];
+  const holding=keys['ControlLeft']||keys['ControlRight']||touch.holdingBreath;
   if(holding&&sway.holdT<sway.maxHold){
     sway.holdT=Math.min(sway.maxHold,sway.holdT+dt);
     const decay=Math.max(0.02,1-sway.holdT/sway.maxHold);
@@ -819,8 +887,9 @@ function drawScopeView(ctx){
   ctx.fillStyle=frac>0.3?'#30f050':'#f03020';
   ctx.fillRect(bx,by+bh*(1-frac),9,bh*frac);
   ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(bx,by,9,bh);
-  ctx.fillStyle='rgba(200,255,200,0.5)'; ctx.font=`8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText('HOLD',bx+4.5,by-5);
+  const breathActive=sway.holdT>0.1&&(keys['ControlLeft']||keys['ControlRight']||touch.holdingBreath);
+  ctx.fillStyle=breathActive?'#ffff60':'rgba(200,255,200,0.5)'; ctx.font=`8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(touch.holdingBreath?'HOLD ↑':'HOLD',bx+4.5,by-5);
 
   // Zoom display
   ctx.fillStyle='rgba(80,200,100,0.5)'; ctx.font=`10px ${MONO}`; ctx.textAlign='center';
@@ -869,7 +938,7 @@ function drawHUD(ctx){
     ctx.fillText('Eliminate the armed suspect (dark figure, holding weapon). Do NOT hit the hostage (lighter figure).',12,RH-30);
 
     ctx.fillStyle='rgba(60,160,80,0.5)'; ctx.font=`11px ${MONO}`;
-    ctx.fillText('RIGHT-CLICK · SHIFT · Z · SCROLL: Scope in/out  ·  CLICK (scoped): Fire  ·  SPACE: Fire  ·  CTRL: Hold breath',12,RH-12);
+    ctx.fillText('RIGHT-CLICK / SHIFT / Z / SCROLL: Scope  ·  Mobile: TAP=scope, DRAG=aim, SWIPE UP=hold breath, PINCH=zoom  ·  CLICK/SPACE: Fire  ·  CTRL: Hold breath',12,RH-12);
   }
 
   // SCOPED: small objective reminder top-left inside scope area
@@ -894,9 +963,9 @@ function drawHUD(ctx){
     ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(RW/2-240,py-22,480,56);
     ctx.strokeStyle='rgba(80,220,100,0.4)'; ctx.lineWidth=1; ctx.strokeRect(RW/2-240,py-22,480,56);
     ctx.fillStyle='#90ffaa'; ctx.font=`bold 18px ${MONO}`; ctx.textAlign='center';
-    ctx.fillText('▶  RIGHT-CLICK · SHIFT · Z · SCROLL  TO SCOPE IN  ◀',RW/2,py+2);
+    ctx.fillText('▶  TAP · RIGHT-CLICK · SHIFT · Z · SCROLL  TO SCOPE IN  ◀',RW/2,py+2);
     ctx.fillStyle='rgba(80,200,100,0.55)'; ctx.font=`11px ${MONO}`;
-    ctx.fillText('Once scoped: CLICK or SPACE to fire  ·  CTRL to hold breath steady',RW/2,py+22);
+    ctx.fillText('Once scoped: DRAG to aim · TAP to fire · SWIPE UP to hold breath · PINCH to zoom',RW/2,py+22);
   }
 
   // HURT
