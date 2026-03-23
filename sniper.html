@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K9J4ZPWL6S"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-K9J4ZPWL6S');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sniper Rescue – Smart Resume Format</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800&family=Barlow&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;background:#000;display:flex;flex-direction:column;}
+nav{width:100%;display:flex;justify-content:space-between;align-items:center;
+    padding:.7rem 4%;background:#0d0820;border-bottom:2px solid #3a1a6e;flex-shrink:0;}
+.logo{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;
+      color:#e8d87a;text-decoration:none;letter-spacing:.05em;}
+.nav-btn{background:#b01010;color:#fff;padding:.38rem 1rem;text-decoration:none;
+         font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;
+         border:1px solid #e03030;letter-spacing:.04em;}
+.nav-btn:hover{background:#d01414;}
+#wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+#C{display:block;cursor:none;}
+footer{background:#07040f;border-top:1px solid #1a0840;padding:1.2rem;text-align:center;
+       color:#444;font-family:'Barlow',sans-serif;font-size:.75rem;flex-shrink:0;}
+footer a{color:#666;margin:0 8px;text-decoration:none;}
+footer a:hover{color:#e8d87a;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="https://smartresumeformat.com" class="logo">Smart Resume Format</a>
+  <a href="https://smartresumeformat.pythonanywhere.com" class="nav-btn">Build Resume</a>
+</nav>
+<div id="wrap"><canvas id="C"></canvas></div>
+<footer>
+  <a href="games.html">← All Games</a> |
+  <a href="privacy.html">Privacy</a> | <a href="terms.html">Terms</a> | <a href="support.html">Support</a><br><br>
+  &copy; 2026 Smart Resume Format. All rights reserved.
+</footer>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════
+// SNIPER RESCUE
+// Control model: Scene is fixed. Mouse moves the AIM POINT.
+// Right-click = scope in (zooms the SCENE under the crosshair).
+// Click = fire.
+// You are above looking down at targets in a courtyard below.
+// Eliminate the armed taker WITHOUT hitting the hostage.
+// ═══════════════════════════════════════════════════════════════
+
+const C=document.getElementById('C'), X=C.getContext('2d');
+const RW=960, RH=600;
+C.width=RW; C.height=RH;
+function resize(){
+  const w=document.getElementById('wrap');
+  const s=Math.min(w.clientWidth/RW,w.clientHeight/RH);
+  C.style.width=Math.floor(RW*s)+'px'; C.style.height=Math.floor(RH*s)+'px';
+}
+resize(); window.addEventListener('resize',resize);
+
+const MONO='Share Tech Mono,monospace';
+const ST={TITLE:0,BRIEF:1,PLAY:2,RESULT:3,OVER:4};
+let gs=ST.TITLE, mIdx=0, score=0, gtime=0, dt=0, lt=0;
+
+// ── HOW IT WORKS ───────────────────────────────────────────────
+// The scene is drawn at a fixed scale covering the canvas.
+// The "aim point" is a screen coordinate (aimX, aimY).
+// When scoped, we draw a zoomed patch of the scene centered on aimX/aimY.
+// The crosshair is always at screen center when scoped,
+// or follows the mouse when unscoped.
+// Breath sway drifts the aimpoint slightly.
+
+let aimX=RW/2, aimY=RH/2;   // where the gun is pointing (screen px)
+let scoped=false;
+const SCOPE_R=260;           // scope circle radius on screen
+const SCOPE_ZOOM=6;          // how much the scope magnifies
+
+// ── MOUSE ──────────────────────────────────────────────────────
+const mouse={x:RW/2, y:RH/2};
+C.addEventListener('mousemove',e=>{
+  const r=C.getBoundingClientRect();
+  mouse.x=(e.clientX-r.left)*(RW/r.width);
+  mouse.y=(e.clientY-r.top)*(RH/r.height);
+});
+C.addEventListener('contextmenu',e=>{ e.preventDefault(); if(gs===ST.PLAY) toggleScope(); });
+C.addEventListener('click',e=>{
+  if(gs===ST.TITLE||gs===ST.RESULT||gs===ST.OVER){ advance(); return; }
+  if(gs===ST.BRIEF){ startMission(); return; }
+  if(gs===ST.PLAY){
+    if(!scoped){ toggleScope(); return; } // left-click scopes in when unscoped
+    fire();
+  }
+});
+C.addEventListener('wheel',e=>{
+  e.preventDefault();
+  if(gs!==ST.PLAY) return;
+  if(!scoped){ toggleScope(); return; } // scroll also scopes in
+  scopeZoom=Math.max(3,Math.min(10,scopeZoom-Math.sign(e.deltaY)*0.5));
+},{passive:false});
+const keys={};
+let shiftWasUp=true;
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(e.code==='Space'){ e.preventDefault();
+    if(gs===ST.TITLE||gs===ST.RESULT||gs===ST.OVER){advance();return;}
+    if(gs===ST.BRIEF){startMission();return;}
+    if(gs===ST.PLAY) fire();
+  }
+  if(e.code==='KeyZ'&&gs===ST.PLAY) toggleScope();
+  // Shift key: tap to toggle scope, hold for breath steadying
+  if((e.code==='ShiftLeft'||e.code==='ShiftRight')&&gs===ST.PLAY&&shiftWasUp){
+    toggleScope(); shiftWasUp=false;
+  }
+});
+document.addEventListener('keyup',e=>{
+  keys[e.code]=false;
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight') shiftWasUp=true;
+});
+
+let scopeZoom=SCOPE_ZOOM;
+function toggleScope(){
+  scoped=!scoped;
+  if(scoped) hasScoped=true;
+  if(!scoped) scopeZoom=SCOPE_ZOOM;
+}
+
+// ── MISSIONS ───────────────────────────────────────────────────
+// Scene layout: everything in screen-pixel coordinates for the
+// UNZOOMED view (zoom=1). The scene fills the canvas.
+// Characters are in the lower half of the canvas (below sniper).
+const MISSIONS=[
+  {
+    name:'OPERATION GREY WOLF',
+    loc:'Hotel Courtyard · 220m · Light Wind',
+    brief:[
+      'ONE ARMED SUSPECT. ONE HOSTAGE.',
+      'The suspect is in the courtyard below. Wind is light — 1.2 m/s.',
+      'RIGHT-CLICK, SHIFT, Z, or SCROLL to scope in. CTRL to hold breath.',
+      'Wait for a clear shot, then CLICK to fire.',
+      'Do NOT hit the hostage.',
+    ],
+    wind:1.2, windDir:1, range:220,
+    takerFires:false, fireInterval:999,
+    moveSpd:0.20, peeks:false,
+  },
+  {
+    name:'OPERATION IRON GATE',
+    loc:'Embassy District · 380m · Moderate Crosswind',
+    brief:[
+      'ONE ARMED SUSPECT. ONE HOSTAGE. SUSPECT ARMED.',
+      'Crosswind from the west — 4.8 m/s. Account for drift.',
+      'The suspect moves and will occasionally take cover.',
+      'Wait for a clear shot. He may return fire.',
+    ],
+    wind:4.8, windDir:-1, range:380,
+    takerFires:true, fireInterval:8,
+    moveSpd:0.37, peeks:true, peekInterval:5,
+  },
+  {
+    name:'OPERATION BLACK SUN',
+    loc:'Port District · 580m · Strong Wind',
+    brief:[
+      'HIGH-VALUE TARGET. MULTIPLE HOSTAGES.',
+      'Strong wind — 9 m/s. Large bullet drift. Fast-moving target.',
+      'He is aware of your position and will return fire.',
+      'He will take cover. Wait. One clean shot.',
+    ],
+    wind:9.0, windDir:1, range:580,
+    takerFires:true, fireInterval:5,
+    moveSpd:0.60, peeks:true, peekInterval:3,
+    extraHostage:true,
+  },
+  {
+    name:'OPERATION COLD MERIDIAN',
+    loc:'Freight Yard · 310m · Calm Wind',
+    brief:[
+      'ONE SUSPECT. TWO HOSTAGES. SUSPECT NOT YET FIRING.',
+      'Wind is nearly calm — 0.8 m/s. Clean conditions.',
+      'The suspect is using both hostages as cover, moving between them.',
+      'Patience is required. Wait for separation before firing.',
+    ],
+    wind:0.8, windDir:-1, range:310,
+    takerFires:false, fireInterval:999,
+    moveSpd:0.47, peeks:true, peekInterval:4,
+    extraHostage:true,
+  },
+  {
+    name:'OPERATION VIPER NEST',
+    loc:'Parking Structure · 430m · East Crosswind',
+    brief:[
+      'ONE SUSPECT. ONE HOSTAGE. ACTIVE SHOOTER.',
+      'East wind — 6.2 m/s. Suspect has already fired on officers.',
+      'He moves quickly and takes frequent cover. He will shoot at you.',
+      'Fire interval is short. Stay low. Make it count.',
+    ],
+    wind:6.2, windDir:1, range:430,
+    takerFires:true, fireInterval:6,
+    moveSpd:0.63, peeks:true, peekInterval:3,
+  },
+  {
+    name:'OPERATION FINAL WATCH',
+    loc:'City Bridge · 500m · Gusting North Wind',
+    brief:[
+      'TWO HOSTAGES. ONE SUSPECT WITH TRIGGER DEVICE.',
+      'Gusting wind from the north — 7.8 m/s, shifting direction.',
+      'Wind direction alternates every few seconds. Track the drift indicator.',
+      'He fires back every 4 seconds. Do not miss.',
+    ],
+    wind:7.8, windDir:-1, range:500,
+    takerFires:true, fireInterval:4,
+    moveSpd:0.53, peeks:true, peekInterval:4,
+    extraHostage:true, shiftingWind:true,
+  },
+  {
+    name:'OPERATION STONE CHAPEL',
+    loc:'Cathedral Square · 460m · Light Tailwind',
+    brief:[
+      'ONE SUSPECT. ONE HOSTAGE. SUSPECT IS STATIONARY.',
+      'Light tailwind — 2.4 m/s. Bullet drop is significant at this range.',
+      'The suspect is not moving but is fully obscured every 2 seconds.',
+      'He knows you are there. Return fire is frequent — every 3.5 seconds.',
+    ],
+    wind:2.4, windDir:1, range:460,
+    takerFires:true, fireInterval:3.5,
+    moveSpd:0.13, peeks:true, peekInterval:2,
+  },
+  {
+    name:'OPERATION DARK TIDE',
+    loc:'Container Port · 640m · Strong Crosswind',
+    brief:[
+      'ONE HIGH-VALUE TARGET. THREE HOSTAGES.',
+      'Strong crosswind — 10.5 m/s from the east.',
+      'Extreme range. Large drift AND significant bullet drop.',
+      'Target moves fast and fires back frequently. Three lives at stake.',
+    ],
+    wind:10.5, windDir:-1, range:640,
+    takerFires:true, fireInterval:4,
+    moveSpd:0.83, peeks:true, peekInterval:2.5,
+    extraHostage:true,
+  },
+  {
+    name:'OPERATION LAST LIGHT',
+    loc:'Financial Tower Rooftop · 720m · Gale-Force Wind',
+    brief:[
+      'ONE SUSPECT. TWO HOSTAGES. EXTREME CONDITIONS.',
+      'Gale-force wind — 13 m/s. Drift is severe.',
+      'Target moves erratically and fires every 3 seconds.',
+      'This is the longest shot yet. Use maximum zoom. Hold your breath.',
+    ],
+    wind:13.0, windDir:1, range:720,
+    takerFires:true, fireInterval:3,
+    moveSpd:1.08, peeks:true, peekInterval:2,
+    extraHostage:true,
+  },
+  {
+    name:'OPERATION RED HORIZON',
+    loc:'Classified Location · 820m · Variable Conditions',
+    brief:[
+      'FINAL MISSION. ONE TARGET. MULTIPLE HOSTAGES.',
+      'Wind: 11.5 m/s, shifting direction. Range: 820m.',
+      'Suspect fires every 2.5 seconds. Moves at maximum speed.',
+      'Takes cover every 2 seconds. This is the hardest shot of your career.',
+    ],
+    wind:11.5, windDir:1, range:820,
+    takerFires:true, fireInterval:2.5,
+    moveSpd:1.33, peeks:true, peekInterval:2,
+    extraHostage:true, shiftingWind:true,
+  },
+];
+
+// ── SCENE LAYOUT ───────────────────────────────────────────────
+// The scene is a fixed illustration. Characters move within it.
+// All coordinates are in scene-pixels (same as screen at zoom=1).
+
+// Scene regions (screen px):
+const SCENE={
+  skyH: 160,        // sky strip height
+  groundY: 160,     // top of ground plane
+  // The action area (courtyard) — where characters are
+  courtX: 200, courtY: 220, courtW: 560, courtH: 280,
+};
+
+// Characters — defined as scene-px positions, drawn each frame
+let taker={}, hostages=[], inFire=[], bulletFx=null;
+let peekT=0, fireT=0, shotsFired=0, windShiftT=3;
+let result=null;
+let shakeT=0, hasScoped=false;
+
+// Sniper breath sway (in screen px, applied to aimX/aimY)
+const sway={x:0, y:0, vx:0, vy:0, holdT:0, maxHold:4.5};
+
+function buildMission(){
+  const M=MISSIONS[mIdx];
+  // Place taker and hostage in the courtyard
+  const cx=SCENE.courtX+SCENE.courtW/2;
+  const cy=SCENE.courtY+SCENE.courtH*0.5;
+  taker={
+    sx:cx+30, sy:cy,        // scene px
+    vx:M.moveSpd*(Math.random()<0.5?1:-1),
+    bounceL:SCENE.courtX+60, bounceR:SCENE.courtX+SCENE.courtW-60,
+    dead:false, hidden:false,
+  };
+  hostages=[{sx:cx-52, sy:cy+8, alive:true}];
+  if(M.extraHostage) hostages.push({sx:cx-80, sy:cy-10, alive:true});
+  inFire=[]; bulletFx=null; shotsFired=0; result=null;
+  peekT=(M.peekInterval||999)*(0.4+Math.random()*0.6);
+  fireT=(M.fireInterval||999)*(0.4+Math.random()*0.6);
+  windShiftT=3; hasScoped=false;
+  // Start aim centered on the action
+  aimX=cx; aimY=cy;
+  scoped=false; scopeZoom=SCOPE_ZOOM;
+  sway.x=0; sway.y=0; sway.vx=0; sway.vy=0; sway.holdT=0;
+  sniper.hp=3; sniper.hurtT=0;
+}
+
+const sniper={hp:3, hurtT:0};
+
+// ── FIRE ───────────────────────────────────────────────────────
+function fire(){
+  if(result||taker.dead) return;
+  if(taker.hidden) return;
+  shotsFired++;
+
+  const M=MISSIONS[mIdx];
+  // Bullet physics in SCREEN px (at current aimX/aimY)
+  // Wind drifts the actual impact horizontally
+  const wDrift=M.wind*M.windDir*(M.range/300)*2.8;
+  // Bullet drop is vertical (downward in scene)
+  const bDrop=Math.pow(M.range/300,2)*6;
+  // Sway is already in screen px — convert to scene px (same thing at zoom=1)
+  const actualX=aimX + sway.x + wDrift;
+  const actualY=aimY + sway.y + bDrop;
+
+  bulletFx={sx:actualX, sy:actualY, t:0};
+
+  const tkHit=!taker.dead && dist2(actualX,actualY,taker.sx,taker.sy)<28*28;
+  let hsHit=false;
+  for(const h of hostages){
+    if(h.alive && dist2(actualX,actualY,h.sx,h.sy)<24*24){
+      h.alive=false; hsHit=true;
+    }
+  }
+
+  if(tkHit&&!hsHit){
+    taker.dead=true;
+    setTimeout(()=>endMission(true,'TANGO DOWN','Hostile neutralized. Hostage secure.'),600);
+  } else if(hsHit&&tkHit){
+    taker.dead=true;
+    setTimeout(()=>endMission(false,'MISSION FAILED','Hostage struck. Shot was not clean.'),600);
+  } else if(hsHit){
+    setTimeout(()=>endMission(false,'MISSION FAILED','You hit the hostage.'),600);
+  } else {
+    // Miss
+    shakeT=0.3;
+    if(shotsFired>=5) setTimeout(()=>endMission(false,'POSITION BLOWN','Too many missed shots.'),400);
+  }
+}
+function dist2(ax,ay,bx,by){return (ax-bx)**2+(ay-by)**2;}
+
+function endMission(win,head,sub){
+  if(result) return;
+  if(win) score+=Math.max(100,500-shotsFired*60+sniper.hp*80);
+  result={win,head,sub};
+  gs=ST.RESULT;
+}
+
+// ── UPDATE ─────────────────────────────────────────────────────
+function update(){
+  const M=MISSIONS[mIdx];
+
+  // Aim tracks mouse directly when NOT scoped
+  // When scoped, mouse still moves aim but slower (finer control)
+  if(!scoped){
+    aimX=mouse.x; aimY=mouse.y;
+  } else {
+    // Scoped: small mouse deltas pan the aim point
+    // aim tracks mouse at 1:1 but clamped to scene bounds
+    aimX+=(mouse.x-RW/2)*0.018;
+    aimY+=(mouse.y-RH/2)*0.018;
+    aimX=Math.max(SCENE.courtX+20,Math.min(SCENE.courtX+SCENE.courtW-20,aimX));
+    aimY=Math.max(SCENE.courtY+10,Math.min(SCENE.courtY+SCENE.courtH-10,aimY));
+  }
+
+  // Sway (breath) — applied ON TOP of aim, in screen px
+  const holding=keys['ControlLeft']||keys['ControlRight'];
+  if(holding&&sway.holdT<sway.maxHold){
+    sway.holdT=Math.min(sway.maxHold,sway.holdT+dt);
+    const decay=Math.max(0.02,1-sway.holdT/sway.maxHold);
+    sway.vx*=0.85*decay; sway.vy*=0.85*decay;
+  } else {
+    if(holding) sway.holdT=Math.min(sway.maxHold+3,sway.holdT+dt);
+    const I=scoped?4.5:0.6;
+    sway.vx+=(Math.random()-0.5)*I*dt*55;
+    sway.vy+=(Math.random()-0.5)*I*dt*55;
+    sway.vy+=Math.sin(gtime*1.4)*(scoped?0.4:0.08)*dt*35;
+    sway.vx*=0.92; sway.vy*=0.92;
+  }
+  if(!holding) sway.holdT=Math.max(0,sway.holdT-dt*0.5);
+  sway.x+=sway.vx*dt; sway.y+=sway.vy*dt;
+  const ms=scoped?22:4;
+  sway.x=Math.max(-ms,Math.min(ms,sway.x));
+  sway.y=Math.max(-ms,Math.min(ms,sway.y));
+  sway.x*=0.97; sway.y*=0.97;
+
+  if(sniper.hurtT>0) sniper.hurtT-=dt;
+  if(shakeT>0) shakeT-=dt;
+  if(bulletFx) bulletFx.t+=dt*2.5;
+
+  if(taker.dead) return;
+
+  // Shifting wind (missions 6 and 10)
+  if(M.shiftingWind){
+    windShiftT-=dt;
+    if(windShiftT<=0){ windShiftT=2.5+Math.random()*3; M.windDir*=-1; }
+  }
+
+  // Taker moves
+  taker.sx+=taker.vx*dt*60;
+  if(taker.sx<taker.bounceL){taker.sx=taker.bounceL; taker.vx=Math.abs(taker.vx);}
+  if(taker.sx>taker.bounceR){taker.sx=taker.bounceR; taker.vx=-Math.abs(taker.vx);}
+  // Hostages trail taker
+  if(hostages[0]&&hostages[0].alive){
+    hostages[0].sx+=(taker.sx-52-hostages[0].sx)*Math.min(1,dt*2);
+  }
+  if(hostages[1]&&hostages[1].alive){
+    hostages[1].sx+=(taker.sx-80-hostages[1].sx)*Math.min(1,dt*2);
+    hostages[1].sy+=(taker.sy-10-hostages[1].sy)*Math.min(1,dt*2);
+  }
+
+  // Peek
+  if(M.peeks){
+    peekT-=dt;
+    if(peekT<=0){
+      taker.hidden=!taker.hidden;
+      peekT=taker.hidden?0.5+Math.random()*1.2:(M.peekInterval||5)*(0.4+Math.random()*0.6);
+    }
+  }
+
+  // Return fire
+  if(M.takerFires&&!taker.hidden){
+    fireT-=dt;
+    if(fireT<=0){
+      fireT=(M.fireInterval||6)*(0.5+Math.random()*0.7);
+      inFire.push({
+        sx:taker.sx+15, sy:taker.sy-10,
+        tx:RW*0.08+Math.random()*80, ty:RH*0.1+Math.random()*60,
+        prog:0, dur:0.28+Math.random()*0.18,
+      });
+    }
+  }
+  for(let i=inFire.length-1;i>=0;i--){
+    const f=inFire[i]; f.prog+=dt/f.dur;
+    if(f.prog>=1){
+      inFire.splice(i,1);
+      if(Math.random()<0.35){
+        sniper.hp=Math.max(0,sniper.hp-1);
+        sniper.hurtT=0.7; shakeT=0.4;
+        if(sniper.hp<=0&&!result) endMission(false,'OPERATOR DOWN','Eliminated by return fire.');
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAWING
+// ═══════════════════════════════════════════════════════════════
+
+// Draw the full scene at 1:1 scale into an offscreen canvas,
+// then either blit it directly (unscoped) or magnify a patch (scoped).
+const OFFSCR=document.createElement('canvas');
+OFFSCR.width=RW; OFFSCR.height=RH;
+const OX=OFFSCR.getContext('2d');
+
+function drawSceneToCtx(ctx){
+  // ── SKY ──────────────────────────────────────────────────────
+  const skyG=ctx.createLinearGradient(0,0,0,SCENE.skyH);
+  skyG.addColorStop(0,'#06090f'); skyG.addColorStop(1,'#0e1826');
+  ctx.fillStyle=skyG; ctx.fillRect(0,0,RW,SCENE.skyH);
+
+  // Stars
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  for(let i=0;i<60;i++){
+    const sx2=((i*137+23)%RW), sy2=((i*97+11)%(SCENE.skyH-10));
+    ctx.fillRect(sx2,sy2,i%4===0?1.5:1,i%4===0?1.5:1);
+  }
+
+  // Horizon glow
+  const hg=ctx.createLinearGradient(0,SCENE.skyH-30,0,SCENE.skyH+30);
+  hg.addColorStop(0,'rgba(0,0,0,0)'); hg.addColorStop(0.5,'rgba(30,50,80,0.4)'); hg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=hg; ctx.fillRect(0,SCENE.skyH-30,RW,60);
+
+  // ── DISTANT SKYLINE ──────────────────────────────────────────
+  ctx.fillStyle='#080f18';
+  const skyline=[[0,105,90],[90,88,70],[160,96,80],[240,80,60],[300,110,100],[400,85,75],
+    [475,95,85],[560,78,65],[625,105,95],[720,88,70],[790,100,80],[870,82,90]];
+  for(const[bx,by,bw] of skyline){
+    ctx.fillRect(bx,by,bw,SCENE.skyH-by);
+    // Lit windows
+    ctx.fillStyle='rgba(255,210,100,0.08)';
+    for(let wy=by+12;wy<SCENE.skyH-8;wy+=18)
+      for(let wx=bx+8;wx<bx+bw-8;wx+=14)
+        if(Math.sin(wx*0.37+wy*0.29)>0.15) ctx.fillRect(wx,wy,6,10);
+    ctx.fillStyle='#080f18';
+  }
+
+  // ── GROUND / COURTYARD (top-down angled view) ────────────────
+  const gG=ctx.createLinearGradient(0,SCENE.skyH,0,RH);
+  gG.addColorStop(0,'#0c1520'); gG.addColorStop(0.4,'#111a24'); gG.addColorStop(1,'#0a1018');
+  ctx.fillStyle=gG; ctx.fillRect(0,SCENE.skyH,RW,RH-SCENE.skyH);
+
+  // Pavement tiles
+  ctx.strokeStyle='rgba(255,255,255,0.025)'; ctx.lineWidth=1;
+  for(let x=0;x<RW;x+=36){ ctx.beginPath();ctx.moveTo(x,SCENE.skyH);ctx.lineTo(x,RH);ctx.stroke(); }
+  for(let y=SCENE.skyH;y<RH;y+=28){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(RW,y);ctx.stroke(); }
+
+  // ── BUILDINGS (sides, seen from above-angle) ─────────────────
+  drawBld(ctx, 20,  170, 160, 340, '#111d28','#1a2d3e');  // left
+  drawBld(ctx, 780, 165, 170, 360, '#12202e','#1c3040');  // right
+  drawBld(ctx, 210, 155, 540, 42,  '#0e1a26','#162438');  // back wall
+  // Foreground ledge (player's position)
+  ctx.fillStyle='#1c2a38'; ctx.fillRect(0,RH-55,RW,55);
+  ctx.fillStyle='#243444'; ctx.fillRect(0,RH-55,RW,8);
+  ctx.fillStyle='#1a2836'; ctx.fillRect(0,RH-47,RW,2);
+  // Drain pipes on ledge
+  for(let px=80;px<RW;px+=150){
+    ctx.fillStyle='#182430'; ctx.fillRect(px,RH-55,8,55);
+    ctx.fillStyle='#243040'; ctx.fillRect(px,RH-55,8,4);
+  }
+
+  // ── COURTYARD DETAILS ────────────────────────────────────────
+  // Courtyard floor (slightly lighter)
+  ctx.fillStyle='rgba(255,255,255,0.015)';
+  ctx.fillRect(SCENE.courtX,SCENE.courtY,SCENE.courtW,SCENE.courtH);
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1.5;
+  ctx.strokeRect(SCENE.courtX,SCENE.courtY,SCENE.courtW,SCENE.courtH);
+
+  // Street lamp pool of light
+  for(const lx of [280,480,680]){
+    const ly=SCENE.courtY+SCENE.courtH*0.3;
+    const lg=ctx.createRadialGradient(lx,ly,0,lx,ly,90);
+    lg.addColorStop(0,'rgba(255,220,120,0.07)'); lg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(lx,ly,90,0,Math.PI*2); ctx.fill();
+    // Lamp post
+    ctx.strokeStyle='#2a3848'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(lx,SCENE.courtY+SCENE.courtH); ctx.lineTo(lx,ly+5); ctx.stroke();
+    ctx.fillStyle='rgba(255,220,120,0.6)';
+    ctx.beginPath(); ctx.arc(lx,ly,4,0,Math.PI*2); ctx.fill();
+  }
+
+  // Crates / cover objects
+  for(const[cx2,cy2,cw,ch] of [[230,310,40,28],[680,330,35,25],[460,420,50,30]]){
+    const cg=ctx.createLinearGradient(cx2,cy2,cx2+cw,cy2+ch);
+    cg.addColorStop(0,'#1e2e1a'); cg.addColorStop(1,'#141e10');
+    ctx.fillStyle=cg; ctx.fillRect(cx2,cy2,cw,ch);
+    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; ctx.strokeRect(cx2,cy2,cw,ch);
+    ctx.beginPath(); ctx.moveTo(cx2,cy2+ch*0.4); ctx.lineTo(cx2+cw,cy2+ch*0.4); ctx.stroke();
+  }
+
+  // Parked vehicle (top-down)
+  ctx.fillStyle='#18242e'; ctx.fillRect(520,390,80,36);
+  ctx.fillStyle='#1e2e3a'; ctx.fillRect(530,395,60,26);
+  ctx.fillStyle='rgba(120,180,220,0.12)'; ctx.fillRect(534,398,26,10); // windshield
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1; ctx.strokeRect(520,390,80,36);
+}
+
+function drawBld(ctx,bx,by,bw,bh,roofC,wallC){
+  // Roof
+  const rg=ctx.createLinearGradient(bx,by,bx+bw,by+bh*0.7);
+  rg.addColorStop(0,wallC); rg.addColorStop(1,roofC);
+  ctx.fillStyle=rg; ctx.fillRect(bx,by,bw,bh*0.7);
+  // Front face
+  const fg=ctx.createLinearGradient(bx,by+bh*0.7,bx,by+bh);
+  fg.addColorStop(0,roofC); fg.addColorStop(1,'#0a1018');
+  ctx.fillStyle=fg; ctx.fillRect(bx,by+bh*0.7,bw,bh*0.3);
+  // Windows
+  ctx.fillStyle='rgba(255,210,100,0.1)';
+  for(let wy=by+20;wy<by+bh*0.65;wy+=32)
+    for(let wx=bx+12;wx<bx+bw-12;wx+=22)
+      if(Math.sin(wx*0.31+wy*0.47)>0.0) ctx.fillRect(wx,wy,10,16);
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,bh);
+}
+
+// Draw a figure from above: just a silhouette — circular head,
+// oval torso. No faces, no features. Dark = taker. Light = hostage.
+function drawFigure(ctx, sx, sy, type, dead){
+  const headR=14, torsoW=18, torsoH=22;
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.45)';
+  ctx.beginPath(); ctx.ellipse(sx+4,sy+headR+torsoH*0.4,torsoW*0.9,8,0,0,Math.PI*2); ctx.fill();
+
+  if(dead){
+    // Slumped — just a dark oval on the ground
+    ctx.fillStyle='rgba(40,0,0,0.7)';
+    ctx.beginPath(); ctx.ellipse(sx,sy+10,torsoW*1.5,headR*0.7,0.4,0,Math.PI*2); ctx.fill();
+    return;
+  }
+
+  const dark=type==='taker';
+  // Torso (seen from above — elongated oval)
+  const tg=ctx.createRadialGradient(sx,sy+headR,0,sx,sy+headR,torsoW);
+  tg.addColorStop(0,dark?'#282828':'#e06010');
+  tg.addColorStop(1,dark?'#111':'#a03c08');
+  ctx.fillStyle=tg;
+  ctx.beginPath(); ctx.ellipse(sx,sy+headR+torsoH*0.4,torsoW,torsoH,0,0,Math.PI*2); ctx.fill();
+
+  // Head (top of head from above)
+  const hg=ctx.createRadialGradient(sx-4,sy-4,0,sx,sy,headR);
+  hg.addColorStop(0,dark?'#2a1e12':'#2e2218');
+  hg.addColorStop(0.5,dark?'#1a1208':'#1e1610');
+  hg.addColorStop(1,dark?'#0d0904':'#0e0c08');
+  ctx.fillStyle=hg;
+  ctx.beginPath(); ctx.arc(sx,sy,headR,0,Math.PI*2); ctx.fill();
+
+  // Specular highlight (hair)
+  ctx.fillStyle=dark?'rgba(255,255,255,0.04)':'rgba(255,255,255,0.06)';
+  ctx.beginPath(); ctx.arc(sx-4,sy-5,headR*0.45,0,Math.PI*2); ctx.fill();
+
+  if(dark){
+    // Weapon (seen from above — barrel extending to one side)
+    ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=3.5; ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(sx+torsoW*0.6,sy+headR*0.3);
+    ctx.lineTo(sx+torsoW*1.9,sy-headR*0.6); ctx.stroke();
+    ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(sx+torsoW*1.7,sy-headR*0.5);
+    ctx.lineTo(sx+torsoW*2.6,sy-headR*1.1); ctx.stroke();
+  } else {
+    // Hostage: bound hands indicator
+    ctx.strokeStyle='rgba(200,170,60,0.5)'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(sx-torsoW*0.5,sy+headR+torsoH*0.2);
+    ctx.lineTo(sx+torsoW*0.5,sy+headR+torsoH*0.2); ctx.stroke();
+  }
+}
+
+// ── DRAW TRACERS ───────────────────────────────────────────────
+function drawTracers(ctx){
+  for(const f of inFire){
+    const p=f.prog;
+    const cx2=f.sx+(f.tx-f.sx)*p, cy2=f.sy+(f.ty-f.sy)*p;
+    const cx0=f.sx+(f.tx-f.sx)*Math.max(0,p-0.07);
+    const cy0=f.sy+(f.ty-f.sy)*Math.max(0,p-0.07);
+    ctx.strokeStyle='rgba(255,140,20,0.85)'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(cx0,cy0); ctx.lineTo(cx2,cy2); ctx.stroke();
+    ctx.fillStyle='rgba(255,200,60,0.7)';
+    ctx.beginPath(); ctx.arc(cx2,cy2,3,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function drawBulletFx(ctx){
+  if(!bulletFx||bulletFx.t>1.5) return;
+  const t=bulletFx.t, a=Math.max(0,1-t*0.8);
+  ctx.globalAlpha=a;
+  ctx.fillStyle='rgba(255,60,0,0.8)';
+  ctx.beginPath(); ctx.arc(bulletFx.sx,bulletFx.sy,Math.min(18,t*60),0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,220,60,0.6)';
+  ctx.beginPath(); ctx.arc(bulletFx.sx,bulletFx.sy,Math.min(8,t*30),0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+// ── DRAW UNSCOPED CROSSHAIR ────────────────────────────────────
+function drawCrosshair(ctx, sx, sy){
+  const gap=12, len=18;
+  ctx.strokeStyle='rgba(220,220,220,0.75)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(sx-gap-len,sy); ctx.lineTo(sx-gap,sy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sx+gap,sy); ctx.lineTo(sx+gap+len,sy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sx,sy-gap-len); ctx.lineTo(sx,sy-gap); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sx,sy+gap); ctx.lineTo(sx,sy+gap+len); ctx.stroke();
+  ctx.strokeStyle='rgba(220,220,220,0.3)';
+  ctx.beginPath(); ctx.arc(sx,sy,gap*1.1,0,Math.PI*2); ctx.stroke();
+}
+
+// ── DRAW SCOPE ─────────────────────────────────────────────────
+// The scope shows a MAGNIFIED view centered on aimX/aimY,
+// masked to a circle. The reticle is drawn over the top.
+function drawScopeView(ctx){
+  const cx=RW/2, cy=RH/2;
+  const SR=SCOPE_R;
+
+  // 1. Draw the zoomed scene into offscreen canvas
+  //    We take a patch of size (RW/sz × RH/sz) centered on aimX/aimY
+  //    and scale it up to fill the scope circle area
+  const sz=scopeZoom;
+  const patchW=SR*2/sz, patchH=SR*2/sz;
+  const patchX=aimX-patchW/2, patchY=aimY-patchH/2;
+
+  // Save, clip to scope circle, draw zoomed scene
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,SR,0,Math.PI*2); ctx.clip();
+
+  // Draw scene zoomed (translate so aimX/aimY maps to screen center)
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.scale(sz,sz);
+  ctx.translate(-aimX,-aimY);
+
+  // Redraw scene at this transform
+  drawSceneToCtx(ctx);
+  // Figures
+  for(const h of hostages) if(h.alive) drawFigure(ctx,h.sx,h.sy,'hostage',false);
+  if(!taker.hidden) drawFigure(ctx,taker.sx,taker.sy,'taker',taker.dead);
+  drawTracers(ctx);
+  drawBulletFx(ctx);
+
+  ctx.restore();
+  ctx.restore();
+
+  // 2. Scope glass effects
+  // Vignette inside scope
+  const vig=ctx.createRadialGradient(cx,cy,SR*0.5,cx,cy,SR);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(0.6,'rgba(0,0,0,0.04)');
+  vig.addColorStop(0.85,'rgba(0,0,0,0.12)');
+  vig.addColorStop(1,'rgba(0,0,0,0.5)');
+  ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,SR,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle=vig; ctx.fillRect(cx-SR,cy-SR,SR*2,SR*2);
+  // Subtle green tint (night scope)
+  ctx.fillStyle='rgba(0,20,0,0.04)'; ctx.fillRect(cx-SR,cy-SR,SR*2,SR*2);
+  ctx.restore();
+
+  // 3. Black mask OUTSIDE scope
+  ctx.fillStyle='#000';
+  ctx.beginPath();
+  ctx.rect(0,0,RW,RH);
+  ctx.arc(cx,cy,SR,0,Math.PI*2,true);
+  ctx.fill('evenodd');
+
+  // 4. Scope ring
+  ctx.strokeStyle='#0d0d0d'; ctx.lineWidth=26;
+  ctx.beginPath(); ctx.arc(cx,cy,SR+1,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.arc(cx,cy,SR+1,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,SR+1,0,Math.PI*2); ctx.stroke();
+
+  // Lens reflection arc
+  ctx.save(); ctx.globalAlpha=0.07;
+  ctx.strokeStyle='#fff'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(cx-SR*0.28,cy-SR*0.22,SR*0.45,Math.PI*1.08,Math.PI*1.62); ctx.stroke();
+  ctx.restore();
+
+  // Chromatic aberration
+  ctx.save(); ctx.globalCompositeOperation='screen'; ctx.globalAlpha=0.03;
+  ctx.strokeStyle='#f00'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.arc(cx-1,cy,SR-2,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='#00f'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.arc(cx+1,cy,SR-2,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  // 5. RETICLE — drawn at screen center (crosshair is always center of scope)
+  // But sway shifts it slightly to show wobble
+  const rwx=cx+sway.x, rwy=cy+sway.y;
+  const rc='rgba(210,0,0,0.9)';
+
+  ctx.strokeStyle=rc; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx-SR,rwy); ctx.lineTo(rwx-18,rwy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rwx+18,rwy); ctx.lineTo(cx+SR,rwy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rwx,cy-SR); ctx.lineTo(rwx,rwy-18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rwx,rwy+18); ctx.lineTo(rwx,cy+SR); ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle=rc;
+  ctx.beginPath(); ctx.arc(rwx,rwy,1.8,0,Math.PI*2); ctx.fill();
+
+  // Mil dots
+  for(let d=-4;d<=4;d++){
+    if(d===0) continue;
+    const r2=Math.abs(d)%2===0?2.8:1.8;
+    ctx.beginPath(); ctx.arc(rwx+d*SR*0.13,rwy,r2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(rwx,rwy+d*SR*0.13,r2,0,Math.PI*2); ctx.fill();
+  }
+  // Sub-ticks
+  ctx.strokeStyle='rgba(210,0,0,0.5)'; ctx.lineWidth=0.8;
+  for(let d=-8;d<=8;d+=2){
+    if(Math.abs(d)<3) continue;
+    ctx.beginPath(); ctx.moveTo(rwx+d*SR*0.065,rwy-4); ctx.lineTo(rwx+d*SR*0.065,rwy+4); ctx.stroke();
+  }
+
+  // Wind + drop indicator (orange dot = where bullet will land)
+  // Clamp to scope circle so it's always visible
+  const M=MISSIONS[mIdx];
+  const wDrift=M.wind*M.windDir*(M.range/300)*2.8*sz; // in scope-screen px
+  const bDrop=Math.pow(M.range/300,2)*6*sz;
+  const rawDotX=rwx+wDrift, rawDotY=rwy+bDrop;
+  // Clamp dot to inside scope circle
+  const dotDist=Math.hypot(rawDotX-cx, rawDotY-cy);
+  const clampR=SR-12;
+  const dotX = dotDist>clampR ? cx+(rawDotX-cx)/dotDist*clampR : rawDotX;
+  const dotY = dotDist>clampR ? cy+(rawDotY-cy)/dotDist*clampR : rawDotY;
+  const clamped = dotDist>clampR;
+  ctx.strokeStyle='rgba(255,165,0,0.5)'; ctx.lineWidth=1; ctx.setLineDash([3,5]);
+  ctx.beginPath(); ctx.moveTo(rwx,rwy); ctx.lineTo(dotX,dotY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,165,0,0.7)';
+  ctx.beginPath(); ctx.arc(dotX,dotY,clamped?5:3,0,Math.PI*2); ctx.fill();
+  // If clamped, draw a small arrow head to show it extends further
+  if(clamped){
+    const ang=Math.atan2(rawDotY-cy,rawDotX-cx);
+    ctx.save(); ctx.translate(dotX,dotY); ctx.rotate(ang);
+    ctx.fillStyle='rgba(255,165,0,0.8)';
+    ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(0,-4); ctx.lineTo(0,4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // Label showing it's out of range
+    ctx.fillStyle='rgba(255,165,0,0.6)'; ctx.font=`9px ${MONO}`; ctx.textAlign='center';
+    ctx.fillText('DRIFT →',dotX,dotY-10);
+  }
+
+  // Breath hold bar
+  const bx=cx+SR+16, by=cy-65, bh=130;
+  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(bx,by,9,bh);
+  const frac=Math.max(0,1-sway.holdT/sway.maxHold);
+  ctx.fillStyle=frac>0.3?'#30f050':'#f03020';
+  ctx.fillRect(bx,by+bh*(1-frac),9,bh*frac);
+  ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(bx,by,9,bh);
+  ctx.fillStyle='rgba(200,255,200,0.5)'; ctx.font=`8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText('HOLD',bx+4.5,by-5);
+
+  // Zoom display
+  ctx.fillStyle='rgba(80,200,100,0.5)'; ctx.font=`10px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`${sz.toFixed(1)}x`,bx+4.5,cy+SR+20);
+}
+
+// ── DRAW HUD ───────────────────────────────────────────────────
+function drawHUD(ctx){
+  const M=MISSIONS[mIdx];
+  // Top bar
+  ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(0,0,RW,38);
+  ctx.strokeStyle='rgba(60,180,80,0.2)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,38); ctx.lineTo(RW,38); ctx.stroke();
+
+  ctx.fillStyle='#60c870'; ctx.font=`bold 12px ${MONO}`; ctx.textAlign='left';
+  ctx.fillText(`M${mIdx+1}: ${M.name}`,10,15);
+  ctx.fillStyle='#3a7848'; ctx.font=`10px ${MONO}`;
+  ctx.fillText(M.loc,10,29);
+
+  const wd=M.windDir>0?'→':'←';
+  ctx.fillStyle='#70d880'; ctx.font=`bold 12px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`RANGE ${M.range}m  ·  WIND ${M.wind}m/s ${wd}  ·  SHOTS ${shotsFired}`,RW/2,15);
+  ctx.fillStyle='#3a7848'; ctx.font=`10px ${MONO}`;
+  ctx.fillText(`SCORE ${score}`,RW/2,29);
+
+  // Health
+  ctx.textAlign='right'; ctx.fillStyle='#60c870'; ctx.font=`bold 12px ${MONO}`;
+  ctx.fillText('HP:',RW-72,15);
+  for(let i=0;i<3;i++){
+    ctx.fillStyle=i<sniper.hp?'#28f048':'#182018';
+    ctx.fillRect(RW-60+i*22,5,17,14);
+  }
+  ctx.fillStyle='#3a7848'; ctx.font=`10px ${MONO}`;
+  ctx.fillText(scoped?`ZOOM ${scopeZoom.toFixed(1)}x`:'SCOPE: OFF',RW-10,29);
+
+  // OBJECTIVE BOX
+  if(!scoped){
+    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,RH-64,RW,64);
+    ctx.strokeStyle='rgba(60,180,80,0.18)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,RH-64); ctx.lineTo(RW,RH-64); ctx.stroke();
+
+    // Objective
+    ctx.fillStyle='rgba(80,220,100,0.75)'; ctx.font=`bold 12px ${MONO}`; ctx.textAlign='left';
+    ctx.fillText('OBJECTIVE:',12,RH-46);
+    ctx.fillStyle='rgba(80,220,100,0.55)'; ctx.font=`11px ${MONO}`;
+    ctx.fillText('Eliminate the armed suspect (dark figure, holding weapon). Do NOT hit the hostage (lighter figure).',12,RH-30);
+
+    ctx.fillStyle='rgba(60,160,80,0.5)'; ctx.font=`11px ${MONO}`;
+    ctx.fillText('RIGHT-CLICK · SHIFT · Z · SCROLL: Scope in/out  ·  CLICK (scoped): Fire  ·  SPACE: Fire  ·  CTRL: Hold breath',12,RH-12);
+  }
+
+  // SCOPED: small objective reminder top-left inside scope area
+  if(scoped){
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(8,44,300,36);
+    ctx.fillStyle='rgba(80,220,100,0.65)'; ctx.font=`10px ${MONO}`; ctx.textAlign='left';
+    ctx.fillText('AIM: armed figure (weapon visible)',14,58);
+    ctx.fillStyle='rgba(255,100,100,0.65)';
+    ctx.fillText('AVOID: lighter figure (the hostage)',14,72);
+  }
+
+  // TAKER HIDDEN
+  if(taker&&taker.hidden&&!taker.dead){
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(RW/2-160,RH/2-20,320,34);
+    ctx.fillStyle='rgba(255,160,0,0.85)'; ctx.font=`bold 13px ${MONO}`; ctx.textAlign='center';
+    ctx.fillText('TARGET IN COVER — WAIT FOR CLEAR SHOT',RW/2,RH/2+2);
+  }
+
+  // Scope prompt — shown until player scopes in for the first time
+  if(!hasScoped&&!scoped&&gs===ST.PLAY){
+    const py=RH/2-30;
+    ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(RW/2-240,py-22,480,56);
+    ctx.strokeStyle='rgba(80,220,100,0.4)'; ctx.lineWidth=1; ctx.strokeRect(RW/2-240,py-22,480,56);
+    ctx.fillStyle='#90ffaa'; ctx.font=`bold 18px ${MONO}`; ctx.textAlign='center';
+    ctx.fillText('▶  RIGHT-CLICK · SHIFT · Z · SCROLL  TO SCOPE IN  ◀',RW/2,py+2);
+    ctx.fillStyle='rgba(80,200,100,0.55)'; ctx.font=`11px ${MONO}`;
+    ctx.fillText('Once scoped: CLICK or SPACE to fire  ·  CTRL to hold breath steady',RW/2,py+22);
+  }
+
+  // HURT
+  if(sniper.hurtT>0){
+    ctx.fillStyle=`rgba(200,0,0,${sniper.hurtT*0.22})`; ctx.fillRect(0,0,RW,RH);
+    ctx.fillStyle=`rgba(255,60,60,${sniper.hurtT*0.65})`;
+    ctx.font=`bold 20px ${MONO}`; ctx.textAlign='center';
+    ctx.fillText('TAKING FIRE',RW/2,RH/2);
+  }
+
+  // Screen shake
+  if(shakeT>0){
+    ctx.fillStyle='rgba(255,200,60,0.04)'; ctx.fillRect(0,0,RW,RH);
+  }
+}
+
+// ── SCREENS ────────────────────────────────────────────────────
+function drawTitle(ctx){
+  ctx.fillStyle='#050810'; ctx.fillRect(0,0,RW,RH);
+  // Simple city silhouette
+  ctx.fillStyle='#080e18';
+  const blds=[[0,0.3,0.08],[0.08,0.22,0.07],[0.15,0.26,0.1],[0.25,0.19,0.06],[0.31,0.28,0.09],
+              [0.4,0.21,0.08],[0.48,0.25,0.1],[0.58,0.2,0.07],[0.65,0.29,0.11],
+              [0.76,0.21,0.08],[0.84,0.24,0.09],[0.93,0.27,0.07]];
+  for(const[xl,yt,wl] of blds){
+    ctx.fillRect(xl*RW,yt*RH,wl*RW,RH);
+    ctx.fillStyle='rgba(255,220,80,0.05)';
+    for(let wy=yt*RH+18;wy<RH-10;wy+=24)
+      for(let wx=xl*RW+8;wx<(xl+wl)*RW-8;wx+=18)
+        if(Math.sin(wx*0.38+wy*0.27)>0.2) ctx.fillRect(wx,wy,8,13);
+    ctx.fillStyle='#080e18';
+  }
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,RW,RH);
+  ctx.strokeStyle='rgba(200,10,10,0.15)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(RW/2,RH*0.43,200,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='rgba(200,10,10,0.07)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(RW/2-230,RH*0.43); ctx.lineTo(RW/2+230,RH*0.43); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(RW/2,RH*0.43-230); ctx.lineTo(RW/2,RH*0.43+230); ctx.stroke();
+  ctx.textAlign='center';
+  ctx.fillStyle='rgba(100,220,120,0.5)'; ctx.font=`bold 13px ${MONO}`;
+  ctx.fillText('SMART RESUME FORMAT PRESENTS',RW/2,RH*0.24);
+  ctx.save();
+  ctx.shadowColor='#007722'; ctx.shadowBlur=40;
+  ctx.fillStyle='#b0ffb8'; ctx.font=`bold 80px ${MONO}`;
+  ctx.fillText('SNIPER',RW/2,RH*0.42);
+  ctx.fillText('RESCUE',RW/2,RH*0.56);
+  ctx.restore();
+  ctx.fillStyle='rgba(70,180,90,0.5)'; ctx.font=`13px ${MONO}`;
+  ctx.fillText(`${MISSIONS.length} MISSIONS  ·  WIND & BULLET DROP  ·  MIL-DOT SCOPE`,RW/2,RH*0.65);
+  if(Math.floor(gtime*2)%2===0){
+    ctx.fillStyle='#90ffaa'; ctx.font=`bold 19px ${MONO}`;
+    ctx.fillText('CLICK OR PRESS SPACE',RW/2,RH*0.79);
+  }
+  ctx.fillStyle='rgba(40,100,55,0.4)'; ctx.font=`10px ${MONO}`;
+  ctx.fillText('by Ty Alami — smartresumeformat.com',RW/2,RH-12);
+}
+
+function drawBriefing(ctx){
+  const M=MISSIONS[mIdx];
+  ctx.fillStyle='rgba(0,0,0,0.95)'; ctx.fillRect(0,0,RW,RH);
+  const cx=RW/2, cy=RH/2;
+  ctx.fillStyle='rgba(0,14,0,0.97)'; ctx.fillRect(cx-370,cy-235,740,470);
+  ctx.strokeStyle='rgba(0,200,50,0.5)'; ctx.lineWidth=2; ctx.strokeRect(cx-370,cy-235,740,470);
+  ctx.strokeStyle='rgba(0,100,25,0.25)'; ctx.lineWidth=1; ctx.strokeRect(cx-364,cy-229,728,458);
+  ctx.fillStyle='#00a030'; ctx.font=`bold 10px ${MONO}`; ctx.textAlign='left';
+  ctx.fillText('TACTICAL OPERATIONS COMMAND  //  CLASSIFIED',cx-355,cy-213);
+  ctx.strokeStyle='rgba(0,120,30,0.3)'; ctx.beginPath(); ctx.moveTo(cx-355,cy-200); ctx.lineTo(cx+355,cy-200); ctx.stroke();
+  ctx.fillStyle='#80ff98'; ctx.font=`bold 26px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`MISSION ${mIdx+1}: ${M.name}`,cx,cy-168);
+  ctx.fillStyle='#40c060'; ctx.font=`12px ${MONO}`;
+  ctx.fillText(M.loc,cx,cy-142);
+  ctx.strokeStyle='rgba(0,100,25,0.3)'; ctx.beginPath(); ctx.moveTo(cx-310,cy-126); ctx.lineTo(cx+310,cy-126); ctx.stroke();
+  ctx.fillStyle='#88e898'; ctx.font=`14px ${MONO}`; ctx.textAlign='left';
+  let ly=cy-100;
+  for(const line of M.brief){ ctx.fillText(line,cx-340,ly); ly+=24; }
+  ctx.strokeStyle='rgba(0,100,25,0.3)'; ctx.beginPath(); ctx.moveTo(cx-310,cy+110); ctx.lineTo(cx+310,cy+110); ctx.stroke();
+  ctx.fillStyle='rgba(50,160,70,0.6)'; ctx.font=`11px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText('The armed suspect has dark clothing and a visible weapon. The hostage is lighter.',cx,cy+130);
+  ctx.fillText('Orange dot in scope = predicted bullet impact (accounts for wind + drop).',cx,cy+148);
+  if(Math.floor(gtime*2)%2===0){
+    ctx.fillStyle='#80ff98'; ctx.font=`bold 17px ${MONO}`;
+    ctx.fillText('CLICK TO BEGIN',cx,cy+192);
+  }
+}
+
+function drawResult(ctx){
+  if(!result) return;
+  ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(0,0,RW,RH);
+  const {win,head,sub}=result;
+  ctx.save();
+  ctx.shadowColor=win?'#00cc44':'#cc0000'; ctx.shadowBlur=55;
+  ctx.fillStyle=win?'#90ffaa':'#ff6060'; ctx.font=`bold 70px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(head,RW/2,RH*0.4); ctx.restore();
+  ctx.fillStyle=win?'rgba(80,200,100,0.7)':'rgba(200,80,80,0.7)';
+  ctx.font=`20px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(sub,RW/2,RH*0.54);
+  if(win){
+    ctx.fillStyle='rgba(60,160,80,0.6)'; ctx.font=`14px ${MONO}`;
+    ctx.fillText(`SCORE: ${score}  ·  SHOTS: ${shotsFired}  ·  HEALTH: ${sniper.hp}/3`,RW/2,RH*0.64);
+  }
+  const isLast=mIdx>=MISSIONS.length-1;
+  if(Math.floor(gtime*2)%2===0){
+    ctx.fillStyle=win?'#80ffaa':'#ff8080'; ctx.font=`bold 18px ${MONO}`;
+    ctx.fillText(win?(isLast?'CLICK TO FINISH':'CLICK — NEXT MISSION'):'CLICK TO RETRY',RW/2,RH*0.77);
+  }
+}
+
+function drawOver(ctx){
+  ctx.fillStyle='rgba(0,0,0,0.97)'; ctx.fillRect(0,0,RW,RH);
+  ctx.save(); ctx.shadowColor='#009930'; ctx.shadowBlur=40;
+  ctx.fillStyle='#a0ffc0'; ctx.font=`bold 58px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText('ALL MISSIONS',RW/2,RH*0.37); ctx.fillText('COMPLETE',RW/2,RH*0.50); ctx.restore();
+  ctx.fillStyle='rgba(80,200,100,0.7)'; ctx.font=`22px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`FINAL SCORE: ${score}`,RW/2,RH*0.64);
+  if(Math.floor(gtime*2)%2===0){
+    ctx.fillStyle='#80ffaa'; ctx.font=`bold 18px ${MONO}`;
+    ctx.fillText('CLICK TO PLAY AGAIN',RW/2,RH*0.78);
+  }
+}
+
+// ── STATE ──────────────────────────────────────────────────────
+function advance(){
+  if(gs===ST.TITLE){ mIdx=0; score=0; gs=ST.BRIEF; buildMission(); return; }
+  if(gs===ST.RESULT){
+    if(result&&result.win){
+      if(mIdx>=MISSIONS.length-1){ gs=ST.OVER; return; }
+      mIdx++; gs=ST.BRIEF; buildMission(); result=null; return;
+    }
+    gs=ST.BRIEF; buildMission(); result=null; return;
+  }
+  if(gs===ST.OVER){ mIdx=0; score=0; gs=ST.TITLE; return; }
+}
+function startMission(){ gs=ST.PLAY; aimX=taker.sx; aimY=taker.sy; }
+
+// ── MAIN LOOP ──────────────────────────────────────────────────
+function loop(ts){
+  requestAnimationFrame(loop);
+  dt=Math.min((ts-lt)/1000,0.05); lt=ts; gtime+=dt;
+  if(gs===ST.PLAY) update();
+  X.clearRect(0,0,RW,RH);
+  if(gs===ST.TITLE){ drawTitle(X); return; }
+  if(gs===ST.BRIEF){ drawBriefing(X); return; }
+  if(gs===ST.OVER){ drawOver(X); return; }
+
+  if(!scoped){
+    // Draw scene at 1:1
+    drawSceneToCtx(X);
+    for(const h of hostages) if(h.alive) drawFigure(X,h.sx,h.sy,'hostage',false);
+    if(taker) drawFigure(X,taker.sx,taker.sy,'taker',taker.dead);
+    drawTracers(X); drawBulletFx(X);
+    drawCrosshair(X,mouse.x,mouse.y);
+  } else {
+    // Draw unzoomed scene first (black surrounds scope)
+    X.fillStyle='#000'; X.fillRect(0,0,RW,RH);
+    drawScopeView(X);
+  }
+  drawHUD(X);
+  if(gs===ST.RESULT) drawResult(X);
+  // Scanlines
+  for(let y=0;y<RH;y+=4){ X.fillStyle='rgba(0,0,0,0.02)'; X.fillRect(0,y,RW,1); }
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
