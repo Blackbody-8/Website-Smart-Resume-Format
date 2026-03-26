@@ -54,6 +54,151 @@ footer a:hover{color:#e8d87a;}
 // Eliminate the armed taker WITHOUT hitting the hostage.
 // ═══════════════════════════════════════════════════════════════
 
+// ── AUDIO ──────────────────────────────────────────────────────
+let audioCtx=null, windNode=null, windGain=null;
+
+function initAudio(){
+  if(audioCtx) return;
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+
+  // Ambient wind — continuous low noise, very subtle
+  const sr=audioCtx.sampleRate;
+  const buf=audioCtx.createBuffer(1,sr*3,sr);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const src=audioCtx.createBufferSource(); src.buffer=buf; src.loop=true;
+  const lpf=audioCtx.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=320;
+  windGain=audioCtx.createGain(); windGain.gain.value=0.018;
+  src.connect(lpf); lpf.connect(windGain); windGain.connect(audioCtx.destination);
+  src.start();
+}
+
+function setWindLevel(v){ if(windGain) windGain.gain.setTargetAtTime(v,audioCtx.currentTime,0.4); }
+
+// Noise burst helper
+function noiseShot(lpfFreq,vol,attack,hold,release,ctx2){
+  const ctx3=ctx2||audioCtx; if(!ctx3) return;
+  const now=ctx3.currentTime;
+  const sr=ctx3.sampleRate;
+  const len=sr*(attack+hold+release);
+  const buf=ctx3.createBuffer(1,len,sr);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const s=ctx3.createBufferSource(); s.buffer=buf;
+  const lpf=ctx3.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=lpfFreq;
+  const g=ctx3.createGain();
+  s.connect(lpf); lpf.connect(g); g.connect(ctx3.destination);
+  g.gain.setValueAtTime(0,now);
+  g.gain.linearRampToValueAtTime(vol,now+attack);
+  g.gain.linearRampToValueAtTime(vol*0.6,now+attack+hold);
+  g.gain.linearRampToValueAtTime(0,now+attack+hold+release);
+  s.start(now);
+}
+
+function sineNote(freq,vol,attack,dur){
+  if(!audioCtx) return;
+  const now=audioCtx.currentTime;
+  const o=audioCtx.createOscillator(); o.type='sine'; o.frequency.value=freq;
+  const g=audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.setValueAtTime(0,now);
+  g.gain.linearRampToValueAtTime(vol,now+attack);
+  g.gain.linearRampToValueAtTime(0,now+attack+dur);
+  o.start(now); o.stop(now+attack+dur+0.05);
+}
+
+function playSound(type){
+  if(!audioCtx) return;
+  const now=audioCtx.currentTime;
+
+  if(type==='rifle'){
+    // Large calibre crack — sharp high noise burst + low body thud
+    noiseShot(8000,0.55,0.002,0.04,0.18);  // high crack
+    noiseShot(180, 0.40,0.005,0.08,0.40);  // low body thud
+    // Sub-bass boom
+    const o=audioCtx.createOscillator(); o.type='sine'; o.frequency.value=60;
+    const g=audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.22,now+0.008);
+    g.gain.linearRampToValueAtTime(0,now+0.32);
+    o.start(now); o.stop(now+0.35);
+  }
+
+  if(type==='ricochet'){
+    // Bullet whiz/ricochet on miss — descending tone
+    const o=audioCtx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(1200,now);
+    o.frequency.exponentialRampToValueAtTime(280,now+0.35);
+    const g=audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.08,now+0.02);
+    g.gain.linearRampToValueAtTime(0,now+0.38);
+    o.start(now); o.stop(now+0.40);
+    // Gravel impact noise
+    noiseShot(600,0.12,0.003,0.02,0.12);
+  }
+
+  if(type==='hit'){
+    // Target hit — thud + brief silence then result
+    noiseShot(200,0.30,0.003,0.05,0.25);
+    noiseShot(4000,0.15,0.002,0.02,0.10);
+  }
+
+  if(type==='hostage_hit'){
+    // Distinct softer thud — different tone to rifle
+    noiseShot(300,0.22,0.008,0.06,0.30);
+  }
+
+  if(type==='incoming'){
+    // Crack of incoming bullet — sharp high noise, fast
+    noiseShot(6000,0.28,0.001,0.015,0.08);
+    // Whiz tone
+    const o=audioCtx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(900,now+0.01);
+    o.frequency.exponentialRampToValueAtTime(300,now+0.20);
+    const g=audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0,now+0.01); g.gain.linearRampToValueAtTime(0.06,now+0.03);
+    g.gain.linearRampToValueAtTime(0,now+0.22);
+    o.start(now+0.01); o.stop(now+0.25);
+  }
+
+  if(type==='scope_in'){
+    // Mechanical click — short low noise
+    noiseShot(800,0.12,0.001,0.008,0.04);
+  }
+
+  if(type==='scope_out'){
+    noiseShot(600,0.09,0.001,0.008,0.035);
+  }
+
+  if(type==='win'){
+    // Three rising tones
+    for(const[f,delay] of[[440,0],[554,0.18],[660,0.36]]){
+      const o=audioCtx.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0,now+delay);
+      g.gain.linearRampToValueAtTime(0.10,now+delay+0.06);
+      g.gain.linearRampToValueAtTime(0,now+delay+0.45);
+      o.start(now+delay); o.stop(now+delay+0.5);
+    }
+  }
+
+  if(type==='fail'){
+    // Two descending tones
+    for(const[f,delay] of[[330,0],[220,0.25]]){
+      const o=audioCtx.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0,now+delay);
+      g.gain.linearRampToValueAtTime(0.09,now+delay+0.07);
+      g.gain.linearRampToValueAtTime(0,now+delay+0.55);
+      o.start(now+delay); o.stop(now+delay+0.6);
+    }
+  }
+}
+
 const C=document.getElementById('C'), X=C.getContext('2d');
 const RW=960, RH=600;
 C.width=RW; C.height=RH;
@@ -193,9 +338,10 @@ document.addEventListener('keyup',e=>{
 
 let scopeZoom=SCOPE_ZOOM;
 function toggleScope(){
+  initAudio();
   scoped=!scoped;
-  if(scoped) hasScoped=true;
-  if(!scoped) scopeZoom=SCOPE_ZOOM;
+  if(scoped){ hasScoped=true; playSound('scope_in'); setWindLevel(0.035); }
+  else { playSound('scope_out'); setWindLevel(0.018); scopeZoom=SCOPE_ZOOM; }
 }
 
 // ── MISSIONS ───────────────────────────────────────────────────
@@ -394,14 +540,11 @@ function fire(){
   if(result||taker.dead) return;
   if(taker.hidden) return;
   shotsFired++;
+  playSound('rifle');
 
   const M=MISSIONS[mIdx];
-  // Bullet physics in SCREEN px (at current aimX/aimY)
-  // Wind drifts the actual impact horizontally
   const wDrift=M.wind*M.windDir*(M.range/300)*2.8;
-  // Bullet drop is vertical (downward in scene)
   const bDrop=Math.pow(M.range/300,2)*6;
-  // Sway is already in screen px — convert to scene px (same thing at zoom=1)
   const actualX=aimX + sway.x + wDrift;
   const actualY=aimY + sway.y + bDrop;
 
@@ -417,15 +560,18 @@ function fire(){
 
   if(tkHit&&!hsHit){
     taker.dead=true;
+    setTimeout(()=>{ playSound('hit'); },200);
     setTimeout(()=>endMission(true,'TANGO DOWN','Hostile neutralized. Hostage secure.'),600);
   } else if(hsHit&&tkHit){
     taker.dead=true;
+    setTimeout(()=>{ playSound('hostage_hit'); },200);
     setTimeout(()=>endMission(false,'MISSION FAILED','Hostage struck. Shot was not clean.'),600);
   } else if(hsHit){
+    setTimeout(()=>{ playSound('hostage_hit'); },200);
     setTimeout(()=>endMission(false,'MISSION FAILED','You hit the hostage.'),600);
   } else {
-    // Miss
     shakeT=0.3;
+    setTimeout(()=>{ playSound('ricochet'); },180);
     if(shotsFired>=5) setTimeout(()=>endMission(false,'POSITION BLOWN','Too many missed shots.'),400);
   }
 }
@@ -436,6 +582,7 @@ function endMission(win,head,sub){
   if(win) score+=Math.max(100,500-shotsFired*60+sniper.hp*80);
   result={win,head,sub};
   gs=ST.RESULT;
+  setTimeout(()=>playSound(win?'win':'fail'),300);
 }
 
 // ── UPDATE ─────────────────────────────────────────────────────
@@ -515,6 +662,7 @@ function update(){
     fireT-=dt;
     if(fireT<=0){
       fireT=(M.fireInterval||6)*(0.5+Math.random()*0.7);
+      playSound('incoming');
       inFire.push({
         sx:taker.sx+15, sy:taker.sy-10,
         tx:RW*0.08+Math.random()*80, ty:RH*0.1+Math.random()*60,
@@ -1098,7 +1246,7 @@ function advance(){
   }
   if(gs===ST.OVER){ mIdx=0; score=0; gs=ST.TITLE; return; }
 }
-function startMission(){ gs=ST.PLAY; aimX=taker.sx; aimY=taker.sy; }
+function startMission(){ initAudio(); gs=ST.PLAY; aimX=taker.sx; aimY=taker.sy; }
 
 // ── MAIN LOOP ──────────────────────────────────────────────────
 function loop(ts){
