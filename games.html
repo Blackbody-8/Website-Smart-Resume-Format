@@ -96,5 +96,32 @@ footer a:hover{color:#e8d87a}
   <a href="privacy.html">Privacy</a> | <a href="terms.html">Terms</a> | <a href="support.html">Support</a><br><br>
   &copy; 2026 Smart Resume Format. All rights reserved.
 </footer>
+
+<!-- Click confetti effect -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script>
+function randomInRange(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+function fireConfetti(options) {
+    confetti(options);
+}
+
+window.addEventListener('click', function(event) {
+    fireConfetti({
+        useWorker: false,
+        colors: ['#FFFFFF', '#0039A6', '#FF6319'],
+        angle: randomInRange(55, 125),
+        spread: randomInRange(20, 50),
+        particleCount: Math.floor(randomInRange(5, 11)),
+        startVelocity: 25,
+        origin: {
+            x: event.clientX / window.innerWidth,
+            y: event.clientY / window.innerHeight
+        }
+    });
+});
+</script>
 </body>
 </html>
