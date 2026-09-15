@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Idaho Trail: 1811 to 1834 | Smart Resume Format</title>
+<style>
+  :root{
+    --bark:#3b2a1a;
+    --bark-dark:#241a10;
+    --parchment:#e8d9b5;
+    --parchment-dark:#c9b183;
+    --moss:#4c5c3a;
+    --rust:#9c4a2c;
+    --blood:#7a1f1f;
+    --gold:#c9a24b;
+    --sky:#2b3a4a;
+  }
+  * { box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0;
+    background: var(--bark-dark);
+    color: var(--parchment);
+    font-family: 'Courier New', Courier, monospace;
+  }
+  header.site{
+    background: var(--bark);
+    border-bottom: 4px solid var(--gold);
+    padding: 14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap: wrap; gap:10px;
+  }
+  header.site a{ color: var(--parchment); text-decoration:none; }
+  header.site .brand{ font-weight:bold; letter-spacing:1px; font-size:18px; }
+  header.site nav a{ margin-left:16px; font-size:14px; opacity:.85; }
+  header.site nav a:hover{ opacity:1; text-decoration:underline; }
+
+  main{
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px 14px 40px;
+  }
+  h1.title{
+    text-align:center;
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-shadow: 2px 2px 0 #000;
+    margin: 10px 0 4px;
+  }
+  p.subtitle{
+    text-align:center;
+    color: var(--parchment-dark);
+    margin: 0 0 18px;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  #gameWrap{
+    position: relative;
+    border: 4px solid var(--gold);
+    background: var(--sky);
+    image-rendering: pixelated;
+    max-width: 100%;
+  }
+  canvas{
+    display:block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    cursor: crosshair;
+  }
+
+  #hud{
+    display:flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    background: var(--bark);
+    border: 3px solid var(--gold);
+    border-top: none;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  #hud span{ white-space: nowrap; }
+  #hud b{ color: var(--gold); }
+
+  #msgBox{
+    margin-top: 10px;
+    min-height: 46px;
+    background: var(--parchment);
+    color: #241a10;
+    border: 3px solid var(--bark);
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  #actions{
+    margin-top: 12px;
+    display:flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  button.trailBtn{
+    background: var(--rust);
+    color: var(--parchment);
+    border: 3px solid var(--bark);
+    padding: 10px 14px;
+    font-family: inherit;
+    font-weight:bold;
+    font-size: 13px;
+    cursor:pointer;
+    letter-spacing: .5px;
+  }
+  button.trailBtn:hover{ background: var(--blood); }
+  button.trailBtn:disabled{ opacity:.4; cursor:not-allowed; }
+  button.trailBtn.alt{ background: var(--moss); }
+  button.trailBtn.alt:hover{ background:#3a4a2a; }
+
+  footer.site{
+    text-align:center;
+    padding: 24px 14px;
+    color: var(--parchment-dark);
+    font-size: 12px;
+    border-top: 2px solid var(--bark);
+    margin-top: 30px;
+  }
+  footer.site a{ color: var(--gold); }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <a class="brand" href="/">Smart Resume Format</a>
+  <nav>
+    <a href="/games.html">← All Games</a>
+  </nav>
+</header>
+
+<main>
+  <h1 class="title">THE IDAHO TRAIL: 1811 TO 1834</h1>
+  <p class="subtitle">The farthest reach of the Oregon Trail, before the wagons came.</p>
+
+  <div id="gameWrap">
+    <canvas id="c" width="640" height="360"></canvas>
+  </div>
+
+  <div id="hud">
+    <span>🩺 Health: <b id="hudHealth">100</b></span>
+    <span>🍖 Food: <b id="hudFood">10</b></span>
+    <span>🔫 Ammo: <b id="hudAmmo">12</b></span>
+    <span>🪤 Traps: <b id="hudTraps">4</b></span>
+    <span>🦫 Beaver Pelts: <b id="hudPelts">0</b></span>
+    <span>🏆 Best: <b id="hudBest">0</b></span>
+    <span>📍 <b id="hudCamp">Fort Hall</b></span>
+    <span>☀ Day <b id="hudDay">1</b></span>
+  </div>
+  <p style="margin:6px 2px 0; font-size:11px; color:var(--parchment-dark);">
+    🦫 Beaver pelts are the season's money — every one you bring to Fort Boise adds to your final trade value.
+  </p>
+
+  <div id="msgBox">Loading the trail...</div>
+  <div id="actions"></div>
+
+</main>
+
+<footer class="site">
+  Built for <a href="/">SmartResumeFormat.com</a> &mdash; a free arcade break from resume writing.
+</footer>
+
+<script>
+/* =========================================================
+   THE IDAHO TRAIL: 1811 TO 1834
+   Original game, original code — set on the historic fur-
+   trade corridor across southern Idaho, from the Astorians'
+   1811 overland crossing to the founding of Fort Hall and
+   Fort Boise in 1834. Not affiliated with or derived from
+   any existing commercial "trail" game.
+   ========================================================= */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const hud = {
+  health: document.getElementById('hudHealth'),
+  food: document.getElementById('hudFood'),
+  ammo: document.getElementById('hudAmmo'),
+  traps: document.getElementById('hudTraps'),
+  pelts: document.getElementById('hudPelts'),
+  best: document.getElementById('hudBest'),
+  camp: document.getElementById('hudCamp'),
+  day: document.getElementById('hudDay'),
+};
+const msgBox = document.getElementById('msgBox');
+const actionsBox = document.getElementById('actions');
+
+const CAMPS = [
+  { name: "Fort Hall", terrain: "plain", desc: "Nathaniel Wyeth's post, raised in 1834 on the Snake River plain. From here the route west toward Fort Boise carries the season's fur brigades." },
+  { name: "American Falls", terrain: "river", trade: true, desc: "The Snake River drops hard here. Salmon run thick in season — and so do the men working these banks for beaver. A trading tent has been pitched by the falls." },
+  { name: "Raft River Divide", terrain: "plain", desc: "Open, dry country where the road toward California splits off from the trail west to Fort Boise." },
+  { name: "Salmon Falls", terrain: "canyon", desc: "A canyon stretch of the Snake where Shoshone families and trapping parties net salmon by the thousands." },
+  { name: "Thousand Springs", terrain: "river", desc: "Clear water pours straight out of the canyon wall here — a rare gift in this dry country." },
+  { name: "Three Island Crossing", terrain: "river", desc: "The Snake must be forded here. A hard, cold crossing that has claimed men and mules alike." },
+  { name: "Bonneville Point", terrain: "mountain", trade: true, desc: "A bluff above the Boise Valley, named for the army officer who crossed South Pass into this country in the 1830s. Traders often wait here for brigades coming down off the bluff." },
+  { name: "Boise River Crossing", terrain: "river", desc: "Thomas McKay's post, built in 1834 near where the Boise meets the Snake. The trapping season ends here — traders are waiting to weigh the season's pelts." },
+];
+
+const INITIAL_STATE = {
+  campIndex: 0,
+  day: 1,
+  health: 100,
+  food: 10,
+  ammo: 12,
+  traps: 4,
+  trapsPlaced: 0,
+  pelts: 0,
+  weaponLevel: 1,       // 1 = trade musket, 2 = long rifle
+  hitBonus: 0,          // extra aim forgiveness from the chosen loadout
+  routeChoiceMade: false,
+  tookShortcut: null,   // true/false while its one-time effect is pending, then reset to null
+  mode: 'title',
+};
+
+const LOADOUTS = {
+  greenhorn: { label: 'Greenhorn', food: 14, ammo: 8,  traps: 5, hitBonus: 0,
+    tagline: 'Well provisioned but unproven — extra food and traps to fall back on.' },
+  seasoned:  { label: 'Seasoned Trapper', food: 7, ammo: 16, traps: 3, hitBonus: 2,
+    tagline: 'A steadier eye and more shot in the horn, but travels lean on food.' },
+};
+
+let state = { ...INITIAL_STATE };
+
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function ri(min,max){ return Math.floor(rand(min,max+1)); }
+
+/* ---------- sound: tiny procedural audio, no external files ---------- */
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx){
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e){ audioCtx = null; }
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type='sine', vol=0.25){
+  const ac = getAudioCtx(); if(!ac) return;
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ac.currentTime);
+  gain.gain.setValueAtTime(0.0001, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(vol, ac.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+  osc.connect(gain).connect(ac.destination);
+  osc.start();
+  osc.stop(ac.currentTime + dur);
+}
+function playShot(){
+  const ac = getAudioCtx(); if(!ac) return;
+  const dur = 0.15;
+  const buffer = ac.createBuffer(1, Math.floor(ac.sampleRate*dur), ac.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<data.length;i++){ data[i] = (Math.random()*2-1) * Math.pow(1 - i/data.length, 3); }
+  const noise = ac.createBufferSource();
+  noise.buffer = buffer;
+  const filter = ac.createBiquadFilter();
+  filter.type = 'lowpass'; filter.frequency.value = 2200;
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0.5, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + dur);
+  noise.connect(filter).connect(gain).connect(ac.destination);
+  noise.start();
+}
+function playHit(legendary){
+  if(legendary){
+    playTone(660, 0.12, 'sine', 0.3);
+    setTimeout(()=>playTone(880, 0.12, 'sine', 0.3), 90);
+    setTimeout(()=>playTone(1100, 0.2, 'sine', 0.3), 180);
+  } else {
+    playTone(880, 0.12, 'triangle', 0.25);
+  }
+}
+function playMiss(){ playTone(140, 0.18, 'sine', 0.2); }
+function playCoin(){
+  playTone(1046, 0.08, 'square', 0.15);
+  setTimeout(()=>playTone(1318, 0.12, 'square', 0.15), 70);
+}
+
+/* ---------- weapon upgrades ---------- */
+const WEAPON_LEVELS = {
+  1: { name: 'Trade Musket', huntShots: 6, defendShots: 8, hitBonus: 0, reloadFrames: 26 },
+  2: { name: 'Long Rifle',   huntShots: 9, defendShots: 12, hitBonus: 4, reloadFrames: 16 },
+};
+function currentWeapon(){ return WEAPON_LEVELS[state.weaponLevel]; }
+
+/* ---------- best-season high score (saved in this browser) ---------- */
+function getBestPelts(){
+  try { return parseInt(localStorage.getItem('idahoTrailBestPelts') || '0', 10); }
+  catch(e){ return 0; }
+}
+function setBestPelts(v){
+  try { localStorage.setItem('idahoTrailBestPelts', String(v)); }
+  catch(e){ /* storage unavailable — best score just won't persist */ }
+}
+
+function updateHud(){
+  hud.health.textContent = state.health;
+  hud.food.textContent = state.food;
+  hud.ammo.textContent = state.ammo;
+  hud.traps.textContent = state.traps;
+  hud.pelts.textContent = state.pelts;
+  hud.best.textContent = getBestPelts();
+  hud.camp.textContent = CAMPS[state.campIndex].name;
+  hud.day.textContent = state.day;
+}
+
+function setMsg(text){ msgBox.textContent = text; }
+
+function clearActions(){ actionsBox.innerHTML = ''; }
+function addAction(label, fn, alt=false, disabled=false){
+  const b = document.createElement('button');
+  b.className = 'trailBtn' + (alt ? ' alt' : '');
+  b.textContent = label;
+  b.disabled = disabled;
+  b.onclick = fn;
+  actionsBox.appendChild(b);
+  return b;
+}
+
+/* ---------- terrain palettes ---------- */
+const PALETTES = {
+  pine:   { sky:'#3a4a5c', ground:'#33421f', accent:'#1f2e12' },
+  mountain:{ sky:'#48566a', ground:'#5a5346', accent:'#3d3a30' },
+  river:  { sky:'#2e3f52', ground:'#3d5c4a', accent:'#274a6b' },
+  plain:  { sky:'#4a5a6c', ground:'#6b6335', accent:'#4f4a26' },
+  canyon: { sky:'#3a2e3c', ground:'#5c4636', accent:'#3d2c20' },
+};
+
+const DECOR_CACHE = {};
+function getDecor(terrain){
+  // positions are randomized once per terrain and cached — this is what
+  // stops the trees/rocks from jumping to new spots on every redraw
+  if(DECOR_CACHE[terrain]) return DECOR_CACHE[terrain];
+  const items = [];
+  for(let i=0;i<10;i++){
+    items.push({ x: (i * 73 + 20) % W, yOffset: ri(0,10) });
+  }
+  DECOR_CACHE[terrain] = items;
+  return items;
+}
+
+function drawBackdrop(terrain){
+  const p = PALETTES[terrain] || PALETTES.plain;
+  ctx.fillStyle = p.sky;
+  ctx.fillRect(0,0,W,H*0.55);
+  ctx.fillStyle = p.ground;
+  ctx.fillRect(0,H*0.55,W,H*0.45);
+  // simple pixel tree/rock silhouettes for texture — fixed positions
+  ctx.fillStyle = p.accent;
+  getDecor(terrain).forEach(d=>{
+    const x = d.x, y = H*0.55 - d.yOffset;
+    if(terrain === 'pine' || terrain === 'mountain'){
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x-14, y+34);
+      ctx.lineTo(x+14, y+34);
+      ctx.closePath();
+      ctx.fill();
+    } else if(terrain === 'river'){
+      ctx.fillRect(x, H*0.5, 40, 6);
+    } else {
+      ctx.fillRect(x, y+20, 8, 14);
+    }
+  });
+}
+
+/* =========================================================
+   TRAIL MAP — persistent overlay showing progress
+   ========================================================= */
+function wrapLabel(text, x, y, maxWidth, lineHeight){
+  const words = text.split(' ');
+  let lines = [], cur = '';
+  words.forEach(w=>{
+    const test = cur ? cur + ' ' + w : w;
+    if(ctx.measureText(test).width > maxWidth && cur){
+      lines.push(cur); cur = w;
+    } else { cur = test; }
+  });
+  if(cur) lines.push(cur);
+  lines.forEach((line,i)=> ctx.fillText(line, x, y + i*lineHeight));
+  return lines.length;
+}
+function wrapLabelLeft(text, x, y, maxWidth, lineHeight){
+  const words = text.split(' ');
+  let lines = [], cur = '';
+  words.forEach(w=>{
+    const test = cur ? cur + ' ' + w : w;
+    if(ctx.measureText(test).width > maxWidth && cur){
+      lines.push(cur); cur = w;
+    } else { cur = test; }
+  });
+  if(cur) lines.push(cur);
+  lines.forEach((line,i)=> ctx.fillText(line, x, y + i*lineHeight));
+  return lines.length;
+}
+
+function drawPeltIcon(x, y, size, color){
+  ctx.save();
+  ctx.translate(x, y);
+  // dark halo behind it so the pelt reads clearly against any background color
+  ctx.fillStyle = 'rgba(15,10,5,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size*0.78, size*0.56, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = color || '#e6a83e';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size*0.62, size*0.42, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20,14,8,0.65)';
+  ctx.lineWidth = Math.max(1, size*0.09);
+  ctx.beginPath();
+  ctx.moveTo(-size*0.32, 0); ctx.lineTo(size*0.32, 0);
+  ctx.moveTo(-size*0.18, -size*0.18); ctx.lineTo(-size*0.18, size*0.18);
+  ctx.moveTo(size*0.18, -size*0.18); ctx.lineTo(size*0.18, size*0.18);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// a stretched hide on a drying frame — the big "hero" pelt illustration
+function drawStretchedHide(cx, cy, r){
+  ctx.save();
+  ctx.translate(cx, cy);
+  // wooden frame (X stakes behind the hide)
+  ctx.strokeStyle = '#4a3320';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-r*1.15, -r*1.05); ctx.lineTo(r*1.15, r*1.05);
+  ctx.moveTo(r*1.15, -r*1.05); ctx.lineTo(-r*1.15, r*1.05);
+  ctx.stroke();
+  // hide body
+  ctx.fillStyle = '#a9752f';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r*0.82, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#5c3b1c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // lacing lines radiating out, like a hide staked taut
+  ctx.strokeStyle = 'rgba(30,20,10,0.45)';
+  ctx.lineWidth = 1.4;
+  for(let a=0;a<Math.PI*2;a+=Math.PI/7){
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*r*0.18, Math.sin(a)*r*0.15);
+    ctx.lineTo(Math.cos(a)*r*0.94, Math.sin(a)*r*0.78);
+    ctx.stroke();
+  }
+  // soft highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.beginPath();
+  ctx.ellipse(-r*0.22, -r*0.22, r*0.36, r*0.24, -0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// full-screen "story" moment shown whenever pelts actually change hands
+function drawPeltStoryScreen(headline, narrative, peltCount){
+  ctx.save();
+  ctx.fillStyle = 'rgba(14,10,6,0.95)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(10, 10, W-20, H-20);
+
+  drawStretchedHide(W/2, 82, 46);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 17px monospace';
+  ctx.fillText(headline, W/2, 158);
+
+  ctx.font = '12px monospace';
+  ctx.fillStyle = '#c9b183';
+  const lineCount = wrapLabel(narrative, W/2, 180, 480, 16);
+
+  const rowY = 180 + lineCount*16 + 22;
+  if(peltCount > 0){
+    const shown = Math.min(peltCount, 10);
+    const spacing = 22;
+    const startX = W/2 - ((shown-1) * spacing) / 2;
+    for(let i=0;i<shown;i++) drawPeltIcon(startX + i*spacing, rowY, 12);
+    if(peltCount > shown){
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = '#e8d9b5';
+      ctx.fillText(`+${peltCount - shown} more`, W/2, rowY + 20);
+    }
+  }
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+function peltTallyPos(big){
+  return { x: W - (big ? 58 : 44), y: big ? 16 : 10 };
+}
+
+function drawTrailMap(big){
+  const barH = big ? 96 : 20;
+  const n = CAMPS.length;
+  const marginX = big ? 34 : 20;
+  const trackY = big ? 50 : barH/2;
+  const usableW = W - marginX*2;
+
+  ctx.fillStyle = 'rgba(30,22,14,0.92)';
+  ctx.fillRect(0,0,W,barH);
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0,barH); ctx.lineTo(W,barH); ctx.stroke();
+
+  // base track
+  ctx.strokeStyle = '#5a4a30';
+  ctx.lineWidth = big ? 3 : 2;
+  ctx.beginPath();
+  ctx.moveTo(marginX, trackY);
+  ctx.lineTo(W - marginX, trackY);
+  ctx.stroke();
+
+  // progress covered so far
+  const progressX = marginX + usableW * (state.campIndex / (n-1));
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = big ? 4 : 3;
+  ctx.beginPath();
+  ctx.moveTo(marginX, trackY);
+  ctx.lineTo(progressX, trackY);
+  ctx.stroke();
+
+  for(let i=0;i<n;i++){
+    const x = marginX + usableW * (i/(n-1));
+    const done = i < state.campIndex;
+    const current = i === state.campIndex;
+    const r = big ? (current ? 8 : 5) : (current ? 4 : 2.5);
+    ctx.fillStyle = current ? '#e8a13c' : done ? '#c9a24b' : '#4a3320';
+    ctx.beginPath();
+    ctx.arc(x, trackY, r, 0, Math.PI*2);
+    ctx.fill();
+    if(current){
+      ctx.strokeStyle = '#e8d9b5';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    if(big){
+      ctx.fillStyle = current ? '#e8d9b5' : (done ? '#c9b183' : '#8a7a5a');
+      ctx.font = current ? 'bold 10px monospace' : '9px monospace';
+      ctx.textAlign = 'center';
+      const labelY = (i % 2 === 0) ? trackY - 20 : trackY + 20;
+      wrapLabel(CAMPS[i].name, x, labelY, 76, 10);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  if(big){
+    ctx.fillStyle = '#e8d9b5';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(`FORT HALL → FORT BOISE  ·  Camp ${state.campIndex+1} of ${n}`, 10, barH - 8);
+  }
+
+  // persistent pelt tally — always visible, top-right of the bar
+  const tally = peltTallyPos(big);
+  drawPeltIcon(tally.x - (big ? 18 : 12), tally.y, big ? 19 : 12);
+  ctx.fillStyle = '#fff3d6';
+  ctx.font = big ? 'bold 14px monospace' : 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`x${state.pelts}`, tally.x, tally.y + (big ? 5 : 4));
+}
+
+// brief on-canvas announcement banner, used for trap outcomes etc.
+function drawAnnouncement(title, sub){
+  const boxW = Math.min(560, Math.max(280, title.length*10 + 50));
+  const boxH = sub ? 62 : 44;
+  const boxX = W/2 - boxW/2, boxY = H/2 - boxH/2;
+  ctx.save();
+  ctx.fillStyle = 'rgba(20,14,8,0.94)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 15px monospace';
+  ctx.fillText(title, W/2, boxY + 27);
+  if(sub){
+    ctx.fillStyle = '#c9b183';
+    ctx.font = '12px monospace';
+    ctx.fillText(sub, W/2, boxY + 47);
+  }
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+
+// same as drawAnnouncement, but shows a row of actual pelt icons beneath the title
+function drawAnnouncementWithPelts(title, count, sub){
+  const boxW = Math.min(560, Math.max(280, title.length*10 + 50));
+  const iconRow = count > 0 ? 30 : 0;
+  const boxH = (sub ? 62 : 44) + iconRow;
+  const boxX = W/2 - boxW/2, boxY = H/2 - boxH/2;
+  ctx.save();
+  ctx.fillStyle = 'rgba(20,14,8,0.94)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 15px monospace';
+  ctx.fillText(title, W/2, boxY + 24);
+
+  if(count > 0){
+    const shown = Math.min(count, 10);
+    const spacing = 22;
+    const startX = W/2 - ((shown-1) * spacing) / 2;
+    for(let i=0;i<shown;i++){
+      drawPeltIcon(startX + i*spacing, boxY + 44, 13);
+    }
+    if(count > shown){
+      ctx.fillStyle = '#e8d9b5';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(`+${count - shown} more`, W/2, boxY + 62);
+    }
+  }
+
+  if(sub){
+    ctx.fillStyle = '#c9b183';
+    ctx.font = '12px monospace';
+    ctx.fillText(sub, W/2, boxY + boxH - 12);
+  }
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function redrawCampScene(){
+  const camp = CAMPS[state.campIndex];
+  drawBackdrop(camp.terrain);
+  drawCampScene();
+  drawTrailMap(true);
+}
+
+/* =========================================================
+   TITLE SCREEN & LOADOUT CHOICE
+   ========================================================= */
+function drawTitleMap(){
+  ctx.fillStyle = '#3d3221';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for(let i=0;i<50;i++){
+    ctx.fillRect((i*137) % W, (i*211) % H, 2, 2);
+  }
+
+  // A simplified but proportionally-correct Idaho outline: narrow northern
+  // panhandle, the Yellowstone-area notch bulging east, and the diagonal
+  // Hells Canyon bulge on the west — traced from the state's real lat/lon
+  // shape (49°N–42°N, roughly -117.25°W–-111.0°W), centered on canvas.
+  const IDAHO_OUTLINE = [
+    [238.9,36],[266.3,36],[267.7,93.9],[309.5,132.4],[301.1,159.4],
+    [329.0,182.6],[390.5,194.1],[405.7,209.6],[405.7,306],[239.2,306],
+    [242.6,217.3],[234.2,190.3],[242.6,167.1],[239.8,140.1],
+  ];
+  ctx.fillStyle = 'rgba(60,48,30,0.92)';
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  IDAHO_OUTLINE.forEach(([x,y],i)=>{ i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); });
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // neighboring territories, old-map style, to help place Idaho in context
+  ctx.font = 'italic 9px monospace';
+  ctx.fillStyle = 'rgba(232,217,181,0.5)';
+  ctx.textAlign = 'center';
+  ctx.fillText('WASHINGTON TERR.', 170, 50);
+  ctx.fillText('MONTANA TERR.', 480, 105);
+  ctx.fillText('WYOMING TERR.', 500, 245);
+  ctx.fillText('UTAH TERR.', 420, 335);
+  ctx.fillText('NEVADA', 280, 335);
+  ctx.fillText('OREGON TERR.', 150, 250);
+
+  ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = 'rgba(232,217,181,0.45)';
+  ctx.fillText('IDAHO', 300, 130);
+
+  // the trail, plotted at each camp's real relative position on the map —
+  // only the two endpoints are named, the rest is open country
+  const TRAIL_POINTS = [
+    {x:367.0,y:266.7,label:'FORT HALL'},
+    {x:355.4,y:276.0},
+    {x:341.6,y:298.7},
+    {x:299.7,y:278.3},
+    {x:297.5,y:275.6},
+    {x:287.0,y:269.4},
+    {x:264.9,y:249.3},
+    {x:262.1,y:244.3,label:'FORT BOISE'},
+  ];
+  ctx.strokeStyle = '#e8a13c';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([3,5]);
+  ctx.beginPath();
+  TRAIL_POINTS.forEach((p,i)=>{ i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y); });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  TRAIL_POINTS.forEach(p=>{
+    const isEnd = !!p.label;
+    ctx.fillStyle = isEnd ? '#e8a13c' : '#c9b183';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, isEnd ? 5 : 3, 0, Math.PI*2);
+    ctx.fill();
+    if(isEnd){ ctx.strokeStyle = '#e8d9b5'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  });
+
+  ctx.font = 'bold 10px monospace';
+  ctx.fillStyle = '#fff3d6';
+  ctx.textAlign = 'left';
+  ctx.fillText('FORT HALL', TRAIL_POINTS[0].x + 8, TRAIL_POINTS[0].y - 4);
+  ctx.textAlign = 'right';
+  ctx.fillText('FORT BOISE', TRAIL_POINTS[7].x - 8, TRAIL_POINTS[7].y - 8);
+  ctx.textAlign = 'left';
+}
+
+function showTitleScreen(){
+  state.mode = 'title';
+  drawTitleMap();
+
+  ctx.fillStyle = 'rgba(20,14,8,0.82)';
+  ctx.fillRect(0, 0, W, 40);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 19px monospace';
+  ctx.fillText('THE IDAHO TRAIL', W/2, 20);
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#c9a24b';
+  ctx.fillText('1811 – 1834', W/2, 35);
+
+  ctx.fillStyle = 'rgba(20,14,8,0.82)';
+  ctx.fillRect(0, H - 58, W, 58);
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#e8d9b5';
+  const lines = [
+    'Hunt, trap, and defend your camp along the historic',
+    "Idaho fur-trade corridor. Survive the trail and bring",
+    "your season's pelts home to Fort Boise.",
+  ];
+  lines.forEach((l,i)=> ctx.fillText(l, W/2, H - 40 + i*13));
+  ctx.textAlign = 'left';
+
+  setMsg("Welcome to the trail. Use the button below to begin.");
+  clearActions();
+  addAction('🏔 Begin the Season', showLoadoutChoice, true);
+}
+
+function drawLoadoutCard(x, y, w, h, loadout, emoji, highlight){
+  ctx.fillStyle = highlight ? 'rgba(90,70,35,0.55)' : 'rgba(50,38,22,0.5)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#c9a24b';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 15px monospace';
+  ctx.fillText(`${emoji} ${loadout.label}`, x + w/2, y + 22);
+
+  ctx.textAlign = 'left';
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#c9b183';
+  const padX = x + 14;
+  const taglineLines = wrapLabelLeft(loadout.tagline, padX, y + 42, w - 28, 13);
+
+  const statsY = y + 42 + taglineLines*13 + 14;
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = '#e8a13c';
+  ctx.fillText(`🍖 Food: ${loadout.food}`, padX, statsY);
+  ctx.fillText(`🔫 Ammo: ${loadout.ammo}`, padX, statsY + 17);
+  ctx.fillText(`🪤 Traps: ${loadout.traps}`, padX, statsY + 34);
+  if(loadout.hitBonus > 0){
+    ctx.fillStyle = '#8fbf6a';
+    ctx.fillText(`🎯 Steadier aim`, padX, statsY + 51);
+  }
+}
+
+function showLoadoutChoice(){
+  state.mode = 'title';
+  drawBackdrop('plain');
+  drawTrailMap(true);
+  ctx.fillStyle = 'rgba(20,14,8,0.92)';
+  ctx.fillRect(0, 96, W, H - 96);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 16px monospace';
+  ctx.fillText('CHOOSE YOUR TRAPPER', W/2, 118);
+  ctx.textAlign = 'left';
+
+  const cardW = 270, cardH = 190, gap = 20;
+  const startX = (W - (cardW*2 + gap)) / 2;
+  const cardY = 130;
+  drawLoadoutCard(startX, cardY, cardW, cardH, LOADOUTS.greenhorn, '🌱');
+  drawLoadoutCard(startX + cardW + gap, cardY, cardW, cardH, LOADOUTS.seasoned, '🎯');
+
+  setMsg("Pick a trapper below to set out on the trail.");
+  clearActions();
+  addAction('🌱 Choose Greenhorn', ()=>beginSeason('greenhorn'));
+  addAction('🎯 Choose Seasoned Trapper', ()=>beginSeason('seasoned'), true);
+}
+
+function beginSeason(loadoutKey){
+  const l = LOADOUTS[loadoutKey];
+  state = {
+    ...INITIAL_STATE,
+    food: l.food,
+    ammo: l.ammo,
+    traps: l.traps,
+    hitBonus: l.hitBonus,
+    mode: 'camp',
+  };
+  updateHud();
+  enterCamp();
+}
+
+function enterCamp(){
+  state.mode = 'camp';
+  const camp = CAMPS[state.campIndex];
+  redrawCampScene();
+  updateHud();
+  setMsg(camp.desc + (state.trapsPlaced > 0 ? " 🪤 Your trap line is ready — click 'Check Trap Line' to collect it." : ""));
+  clearActions();
+
+  addAction('🔫 Hunt', startHunt, false, state.ammo <= 0);
+  const trapsReady = state.trapsPlaced > 0;
+  addAction(
+    trapsReady ? '🪤 Check Trap Line' : '🪤 Set Traps',
+    doTraps,
+    trapsReady,   // highlighted green when there's something to collect
+    !trapsReady && state.traps <= 0
+  );
+  addAction('🏕 Rest & Mend', doRest);
+  if(camp.trade){
+    addAction('🏪 Trade Post', openTradePost, true);
+  }
+  const lastCamp = state.campIndex >= CAMPS.length - 1;
+  addAction(lastCamp ? '🏁 Reach the Post' : '➡ Move to Next Camp', doMove, true);
+
+  if(state.ammo <=0){
+    setTimeout(()=>setMsg(camp.desc + " You're out of ammunition — hunting and camp defense will be dangerous."), 50);
+  }
+}
+
+function drawCampScene(){
+  // campfire + tents, simple pixel shapes
+  ctx.fillStyle = '#241a10';
+  ctx.fillRect(W/2-40, H*0.72, 80, 30);
+  ctx.fillStyle = '#4a3320';
+  ctx.beginPath();
+  ctx.moveTo(W/2-40, H*0.72);
+  ctx.lineTo(W/2, H*0.55);
+  ctx.lineTo(W/2+40, H*0.72);
+  ctx.closePath();
+  ctx.fill();
+  // fire
+  const flick = 4 + Math.sin(Date.now()/150)*3;
+  ctx.fillStyle = '#c9622b';
+  ctx.fillRect(W/2-6, H*0.78-flick, 12, 14+flick);
+  ctx.fillStyle = '#e8a13c';
+  ctx.fillRect(W/2-3, H*0.80-flick*0.6, 6, 8+flick*0.6);
+}
+
+/* =========================================================
+   HUNT MODE — shooting mini-game
+   ========================================================= */
+let huntState = null;
+
+// shared musket rifle sprite, drawn at the bottom center of the scene —
+// represents the shooter's position that shots are fired from
+const GUN_X = W/2, GUN_Y = H - 6;
+function drawMusket(flash, reloading){
+  ctx.save();
+  ctx.translate(GUN_X, GUN_Y);
+  // stock + barrel, angled slightly up
+  ctx.fillStyle = '#241a10';
+  ctx.fillRect(-5, -34, 10, 34);
+  ctx.fillStyle = '#4a3320';
+  ctx.fillRect(-3, -20, 6, 16);
+  if(flash > 0){
+    ctx.fillStyle = `rgba(255,214,120,${flash/6})`;
+    ctx.beginPath();
+    ctx.arc(0, -34, 6 + (6-flash)*3, 0, Math.PI*2);
+    ctx.fill();
+  }
+  if(reloading){
+    ctx.fillStyle = 'rgba(200,200,190,0.35)';
+    ctx.beginPath();
+    ctx.arc(0, -34, 5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function updateAndDrawProjectiles(list, onImpact){
+  list.forEach(p => p.step += 1);
+  for(let i=list.length-1;i>=0;i--){
+    const p = list[i];
+    if(p.step >= p.steps){
+      onImpact(p);
+      list.splice(i,1);
+    }
+  }
+  list.forEach(p=>{
+    const t = p.step / p.steps;
+    const px = p.x + (p.tx - p.x) * t;
+    const py = p.y + (p.ty - p.y) * t - Math.sin(t*Math.PI) * 10; // slight arc
+    // smoke puff trailing the ball
+    ctx.fillStyle = 'rgba(210,205,195,0.25)';
+    ctx.beginPath();
+    ctx.arc(px - (p.tx-p.x)*0.06, py - (p.ty-p.y)*0.06 + 3, 4, 0, Math.PI*2);
+    ctx.fill();
+    // the musket ball itself
+    ctx.fillStyle = '#3a3226';
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function startHunt(){
+  if(state.ammo <= 0){ setMsg("No ammunition left to hunt with."); return; }
+  state.mode = 'hunt';
+  const camp = CAMPS[state.campIndex];
+  const weapon = currentWeapon();
+  huntState = {
+    terrain: camp.terrain,
+    animals: [],
+    projectiles: [],
+    popTexts: [],
+    peltFlies: [],
+    catchLog: [],
+    gunFlash: 0,
+    shotsLeft: weapon.huntShots,
+    hits: 0,
+    timeLeft: 12, // seconds
+    startedAt: Date.now(),
+    spawnTimer: 0,
+    legendarySpawned: false,
+    legendaryBanner: null,
+    reloading: false,
+    reloadTimer: 0,
+    foodCap: 10,          // classic "you can only carry so much meat" limit
+    foodThisHunt: 0,
+    peltsGainedThisHunt: 0,
+    packFullShown: false,
+  };
+  clearActions();
+  setMsg("Game crosses the clearing — click to fire, then reload before your next shot!");
+  addAction('⬅ Leave the Hunt', ()=>{ endHunt(true); }, true);
+  requestAnimationFrame(huntLoop);
+}
+
+const ANIMAL_TYPES = {
+  deer:   { food: 4, pelt: 0, color: '#8a6a3f', size: 26, speed: [1, 2], label: 'Deer',   emoji: '🦌' },
+  beaver: { food: 2, pelt: 1, color: '#5c4327', size: 16, speed: [1, 2], label: 'Beaver',  emoji: '🦫' },
+  rabbit: { food: 1, pelt: 0, color: '#c9b183', size: 10, speed: [2.5, 4], label: 'Rabbit', emoji: '🐇' },
+  otter:  { food: 1, pelt: 2, color: '#3d5c4a', size: 13, speed: [2, 3.2], terrains: ['river','canyon'], label: 'Otter', emoji: '🦦' },
+  fox:    { food: 1, pelt: 1, color: '#b5592e', size: 14, speed: [3, 4.5], terrains: ['plain','mountain'], label: 'Fox', emoji: '🦊' },
+  mink:   { food: 0, pelt: 3, color: '#241a10', size: 9,  speed: [3.5, 5], terrains: ['river'], label: 'Mink', emoji: '🐾' },
+};
+const LEGENDARY = { name: 'The King Beaver', food: 6, pelt: 5, color: '#e8a13c', size: 22, speed: [3, 4], label: 'King Beaver', emoji: '🏆' };
+
+function spawnAnimal(){
+  const terrain = huntState.terrain;
+  const eligible = Object.keys(ANIMAL_TYPES).filter(t => !ANIMAL_TYPES[t].terrains || ANIMAL_TYPES[t].terrains.includes(terrain));
+  let type, legendary = false;
+  if(!huntState.legendarySpawned && Math.random() < 0.06){
+    legendary = true;
+    huntState.legendarySpawned = true;
+    type = 'legend';
+  } else {
+    type = eligible[ri(0, eligible.length - 1)];
+  }
+  const cfg = legendary ? LEGENDARY : ANIMAL_TYPES[type];
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const y = rand(H*0.55, H*0.85);
+  const distance = legendary ? 1 : rand(0.72, 1.3); // near (>1, bigger/slower) vs far (<1, smaller/faster)
+  huntState.animals.push({
+    type, legendary, dir,
+    x: dir === 1 ? -30 : W+30,
+    y, baseY: y,
+    speed: rand(cfg.speed[0], cfg.speed[1]) * (legendary ? 1.3 : (2 - distance)),
+    size: cfg.size * distance,
+    alive: true,
+    wobble: rand(0, 100),
+  });
+}
+
+function updateAndDrawPopTexts(list){
+  for(let i=list.length-1;i>=0;i--){
+    const t = list[i];
+    t.life -= 1;
+    t.y -= 0.7;
+    if(t.life <= 0){ list.splice(i,1); continue; }
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, t.life / 18);
+    ctx.fillStyle = '#fff3d6';
+    ctx.strokeStyle = 'rgba(20,14,8,0.9)';
+    ctx.lineWidth = 3;
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.strokeText(t.text, t.x, t.y);
+    ctx.fillText(t.text, t.x, t.y);
+    ctx.restore();
+  }
+  ctx.textAlign = 'left';
+}
+
+function updateAndDrawPeltFlies(list){
+  const target = peltTallyPos(false);
+  for(let i=list.length-1;i>=0;i--){
+    const f = list[i];
+    f.t += 1;
+    if(f.t >= f.dur){ list.splice(i,1); continue; }
+    const p = f.t / f.dur;
+    const x = f.startX + (target.x - f.startX) * p;
+    const y = f.startY + (target.y - f.startY) * p - Math.sin(p * Math.PI) * 34;
+    const scale = 1 - p * 0.35;
+    ctx.save();
+    ctx.globalAlpha = p > 0.8 ? (1 - p) * 5 : 1;
+    drawPeltIcon(x, y, 11 * scale);
+    ctx.restore();
+  }
+}
+
+function huntLoop(){
+  if(state.mode !== 'hunt') return;
+  const camp = CAMPS[state.campIndex];
+  drawBackdrop(camp.terrain);
+
+  const now = Date.now();
+  const elapsed = (now - huntState.startedAt)/1000;
+  huntState.timeLeft = Math.max(0, 12 - elapsed);
+
+  huntState.spawnTimer -= 1;
+  if(huntState.spawnTimer <= 0 && huntState.animals.length < 3){
+    spawnAnimal();
+    huntState.spawnTimer = ri(30,60);
+  }
+
+  huntState.animals.forEach(a=>{
+    if(!a.alive) return;
+    a.x += a.speed * a.dir;
+    if(a.legendary){ a.y = a.baseY + Math.sin((a.x + a.wobble) / 14) * 12; }
+  });
+  huntState.animals = huntState.animals.filter(a => a.alive && a.x > -50 && a.x < W+50);
+
+  // draw animals as simple pixel blobs
+  huntState.animals.forEach(a=>{
+    const cfg = a.legendary ? LEGENDARY : ANIMAL_TYPES[a.type];
+    ctx.fillStyle = cfg.color;
+    ctx.fillRect(a.x - a.size/2, a.y - a.size/2, a.size, a.size*0.7);
+    ctx.fillRect(a.x - a.size/2 + (a.dir>0?a.size*0.6:-a.size*0.1), a.y - a.size*0.7, a.size*0.5, a.size*0.4);
+    if(a.legendary){
+      ctx.strokeStyle = '#ffe27a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(a.x - a.size/2 - 2, a.y - a.size/2 - 2, a.size + 4, a.size*0.7 + 4);
+    }
+  });
+
+  // musket ball in flight, resolves the shot on arrival
+  updateAndDrawProjectiles(huntState.projectiles, (p)=>{
+    let hit = false;
+    if(p.target && p.target.alive){
+      p.target.alive = false;
+      hit = true;
+      huntState.hits += 1;
+      const cfg = p.target.legendary ? LEGENDARY : ANIMAL_TYPES[p.target.type];
+
+      // classic "you can only carry so much meat" cap — pelts are always kept in full
+      const room = Math.max(0, huntState.foodCap - huntState.foodThisHunt);
+      const foodAwarded = Math.min(cfg.food, room);
+      huntState.foodThisHunt += foodAwarded;
+      state.food += foodAwarded;
+      state.pelts += cfg.pelt;
+      huntState.peltsGainedThisHunt += cfg.pelt;
+      updateHud();
+      playHit(p.target.legendary);
+      huntState.catchLog.push(cfg.label);
+
+      const packFull = cfg.food > 0 && foodAwarded === 0;
+      const rewardText = [
+        cfg.pelt > 0 ? `+${cfg.pelt} pelt${cfg.pelt===1?'':'s'}` : '',
+        foodAwarded > 0 ? `+${foodAwarded} food` : (packFull ? '🎒 pack full!' : ''),
+      ].filter(Boolean).join('  ');
+      huntState.popTexts.push({
+        x: p.tx, y: p.ty - 10,
+        text: `${cfg.emoji} ${cfg.label}!  ${rewardText}`,
+        life: 55,
+      });
+      if(packFull && !huntState.packFullShown){
+        huntState.packFullShown = true;
+        setMsg("🎒 Your pack is full of meat — any more game will only be worth its pelt.");
+      }
+
+      if(cfg.pelt > 0){
+        const flyCount = Math.min(cfg.pelt, 5);
+        for(let k=0;k<flyCount;k++){
+          huntState.peltFlies.push({
+            startX: p.tx + rand(-6,6), startY: p.ty + rand(-6,6),
+            t: 0, dur: 34 + k*4,
+          });
+        }
+      }
+
+      if(p.target.legendary){
+        huntState.legendaryBanner = {
+          text: `🏆 LEGENDARY CATCH: ${LEGENDARY.name}!`,
+          count: LEGENDARY.pelt,
+          sub: foodAwarded > 0 ? `+${foodAwarded} food` : '🎒 pack full — pelts kept in full',
+          timer: 100,
+        };
+      }
+    } else {
+      playMiss();
+    }
+    ctx.fillStyle = hit ? 'rgba(200,160,60,0.55)' : 'rgba(120,30,30,0.35)';
+    ctx.beginPath();
+    ctx.arc(p.tx, p.ty, 16, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  updateAndDrawPopTexts(huntState.popTexts);
+
+  if(huntState.legendaryBanner){
+    drawAnnouncementWithPelts(huntState.legendaryBanner.text, huntState.legendaryBanner.count, huntState.legendaryBanner.sub);
+    huntState.legendaryBanner.timer -= 1;
+    if(huntState.legendaryBanner.timer <= 0) huntState.legendaryBanner = null;
+  }
+
+  if(huntState.gunFlash > 0) huntState.gunFlash -= 1;
+  if(huntState.reloading){
+    huntState.reloadTimer -= 1;
+    if(huntState.reloadTimer <= 0) huntState.reloading = false;
+  }
+  drawMusket(huntState.gunFlash, huntState.reloading);
+
+  // HUD overlay (shifted down to make room for the trail map strip)
+  drawTrailMap(false);
+  updateAndDrawPeltFlies(huntState.peltFlies);
+  ctx.fillStyle = 'rgba(36,26,16,0.7)';
+  ctx.fillRect(0,20,W,24);
+  ctx.fillStyle = huntState.reloading ? '#e8a13c' : '#e8d9b5';
+  ctx.font = '14px monospace';
+  const statusText = huntState.reloading ? '  RELOADING…' : '';
+  ctx.fillText(`Shots left: ${huntState.shotsLeft}   Hits: ${huntState.hits}   Time: ${huntState.timeLeft.toFixed(1)}s${statusText}`, 10, 37);
+
+  if(huntState.timeLeft <= 0 || huntState.shotsLeft <= 0){
+    endHunt(false);
+    return;
+  }
+  requestAnimationFrame(huntLoop);
+}
+
+function huntClick(evt){
+  if(state.mode !== 'hunt' || huntState.shotsLeft <= 0) return;
+  if(huntState.reloading) return; // musket's still being reloaded
+  if(state.ammo <= 0){
+    setMsg("Out of ammunition — no more shots this hunt, but time keeps running.");
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const cx = (evt.clientX - rect.left) * scaleX;
+  const cy = (evt.clientY - rect.top) * scaleY;
+
+  const weapon = currentWeapon();
+  huntState.shotsLeft -= 1;
+  state.ammo = Math.max(0, state.ammo - 1);
+  huntState.reloading = true;
+  huntState.reloadTimer = weapon.reloadFrames;
+  updateHud();
+  playShot();
+
+  // target is whatever's under the crosshair at the moment of firing
+  let target = null;
+  for(const a of huntState.animals){
+    if(!a.alive) continue;
+    const dx = cx - a.x, dy = cy - a.y;
+    if(Math.abs(dx) < a.size*0.7 + weapon.hitBonus + state.hitBonus && Math.abs(dy) < a.size*0.6 + weapon.hitBonus + state.hitBonus){
+      target = a;
+      break;
+    }
+  }
+
+  const dist = Math.hypot(cx - GUN_X, cy - GUN_Y);
+  huntState.projectiles.push({
+    x: GUN_X, y: GUN_Y, tx: cx, ty: cy,
+    step: 0, steps: Math.max(6, Math.round(dist/24)),
+    target,
+  });
+  huntState.gunFlash = 6;
+}
+canvas.addEventListener('click', (e)=>{
+  if(state.mode === 'hunt') huntClick(e);
+  else if(state.mode === 'defend') defendClick(e);
+});
+
+function endHunt(early){
+  const gained = huntState.hits;
+  const peltsGained = huntState.peltsGainedThisHunt;
+  const tally = {};
+  huntState.catchLog.forEach(label => { tally[label] = (tally[label]||0) + 1; });
+  const summary = Object.keys(tally).map(label => `${tally[label]}x ${label}`).join(', ');
+  const summaryMsg = gained === 0
+    ? (early ? "You break off the hunt without a shot landed." : "The hunt ends — nothing brought down this time.")
+    : `${early ? 'You break off the hunt' : 'The hunt ends'} — you brought down ${summary}.`;
+
+  if(peltsGained > 0){
+    state.mode = 'story';
+    drawPeltStoryScreen(
+      gained === 1 ? 'A CLEAN SHOT' : "A GOOD DAY'S HUNT",
+      `${early ? 'You break off the hunt' : 'The hunt ends'} having brought down ${summary}. The pelts go into your pack for the trade ahead.`,
+      peltsGained
+    );
+    setMsg(summaryMsg);
+    clearActions();
+    setTimeout(()=>{ huntState = null; enterCamp(); }, 2200);
+  } else {
+    state.mode = 'camp';
+    setMsg(summaryMsg);
+    huntState = null;
+    enterCamp();
+  }
+}
+
+/* =========================================================
+   TRAPPING
+   ========================================================= */
+function doTraps(){
+  if(state.trapsPlaced > 0){
+    // resolve traps set the previous day
+    let peltsFound = 0, lost = 0;
+    for(let i=0;i<state.trapsPlaced;i++){
+      const roll = Math.random();
+      if(roll < 0.45){ peltsFound += 1; }
+      else if(roll < 0.6){ lost += 1; } // trap destroyed/stolen
+    }
+    state.pelts += peltsFound;
+    state.traps -= lost;
+    state.trapsPlaced = 0;
+    const outcomeMsg = `You check the trap line: ${peltsFound} pelt(s) taken, ${lost} trap(s) lost to the current or a rival trapper.` +
+      (state.traps <= 0 ? " You're out of traps." : "");
+    setMsg(outcomeMsg);
+    updateHud();
+    clearActions();
+    if(peltsFound > 0) playCoin(); else playMiss();
+
+    // announce the result directly on the trail scene, then return to camp
+    redrawCampScene();
+    if(peltsFound > 0){
+      state.mode = 'story';
+      drawPeltStoryScreen(
+        'TRAP LINE CHECKED',
+        `You pull ${peltsFound} pelt${peltsFound===1?'':'s'} from the line this morning.` +
+          (lost > 0 ? ` ${lost} trap${lost===1?'':'s'} lost to the current.` : ''),
+        peltsFound
+      );
+    } else {
+      drawAnnouncement('🪤 TRAP LINE: NOTHING CAUGHT', lost > 0 ? `${lost} trap${lost===1?'':'s'} lost to the current` : undefined);
+    }
+    setTimeout(enterCamp, peltsFound > 0 ? 2200 : 1800);
+    return;
+  }
+
+  if(state.traps <= 0){ setMsg("No traps left to set."); return; }
+  const toSet = Math.min(state.traps, ri(1,3));
+  state.trapsPlaced = toSet;
+  state.traps -= 0; // traps stay "owned" until lost, set doesn't consume count itself
+  setMsg(`You set ${toSet} trap(s) along the water. Traps need a night to catch anything — rest here, and 'Check Trap Line' will appear when you wake.`);
+  clearActions();
+  addAction('🏕 Rest & Mend (traps ready by morning)', doRest);
+  const lastCamp = state.campIndex >= CAMPS.length - 1;
+  addAction(lastCamp ? '🏁 Reach the Post' : '➡ Move to Next Camp', doMove, true);
+}
+
+/* =========================================================
+   TRADE POST — sell pelts for supplies, upgrade the rifle
+   ========================================================= */
+function openTradePost(){
+  state.mode = 'camp';
+  redrawCampScene();
+  clearActions();
+  setMsg(`Trade Post: ${state.pelts} beaver pelt(s) on hand. Sell for supplies, or invest in a better rifle.`);
+
+  addAction('Sell 1 Pelt → +3 Ammo', ()=>tradeSell('ammo',3), false, state.pelts < 1);
+  addAction('Sell 1 Pelt → +3 Food', ()=>tradeSell('food',3), false, state.pelts < 1);
+  addAction('Sell 1 Pelt → +1 Trap', ()=>tradeSell('trap',1), false, state.pelts < 1);
+  if(state.weaponLevel < 2){
+    addAction(`Buy a Long Rifle (6 pelts) — faster, farther shots`, buyRifle, true, state.pelts < 6);
+  } else {
+    addAction('✓ Long Rifle already in hand', ()=>{}, true, true);
+  }
+  addAction('⬅ Back to Camp', enterCamp, true);
+}
+
+function tradeSell(kind, amount){
+  state.pelts -= 1;
+  if(kind === 'ammo') state.ammo += amount;
+  if(kind === 'food') state.food += amount;
+  if(kind === 'trap') state.traps += amount;
+  updateHud();
+  playCoin();
+  openTradePost();
+}
+
+function buyRifle(){
+  state.pelts -= 6;
+  state.weaponLevel = 2;
+  updateHud();
+  playCoin();
+  setMsg("You trade six pelts for a Long Rifle — more shots per hunt, and a steadier aim.");
+  openTradePost();
+}
+
+
+function doRest(){
+  state.day += 1;
+  state.food = Math.max(0, state.food - 2);
+  if(state.food <= 0){
+    state.health = clamp(state.health - 12, 0, 100);
+  } else {
+    state.health = clamp(state.health + 4, 0, 100);
+  }
+  updateHud();
+
+  const camp = CAMPS[state.campIndex];
+  const dangerChance = camp.terrain === 'canyon' ? 0.55 : camp.terrain === 'plain' ? 0.4 : 0.3;
+  if(Math.random() < dangerChance){
+    startDefend();
+    return;
+  }
+
+  if(state.health <= 0){
+    endGame(false);
+    return;
+  }
+
+  setMsg("Night passes quietly. The party wakes stiff but rested.");
+  clearActions();
+  setTimeout(enterCamp, 30);
+}
+
+/* =========================================================
+   DEFEND MODE — night camp defense shooting
+   ========================================================= */
+const THREAT_TYPES = {
+  wolves:  { label: 'a pack of wolves', color: '#3a3226', size: 13, speed: [2.2, 3.6], damage: 6,  spawnGap: [14, 26] },
+  bear:    { label: 'a hungry bear',    color: '#4a3320', size: 30, speed: [0.7, 1.2], damage: 22, spawnGap: [70, 100] },
+  raiders: { label: 'rival trappers testing the camp', color: '#5c4327', size: 18, speed: [1.4, 2.4], damage: 11, spawnGap: [28, 48] },
+};
+
+let defendState = null;
+function startDefend(){
+  state.mode = 'defend';
+  const threatKeys = Object.keys(THREAT_TYPES);
+  const threatKey = threatKeys[ri(0, threatKeys.length - 1)];
+  const threatCfg = THREAT_TYPES[threatKey];
+  const weapon = currentWeapon();
+  const approachDir = Math.random() < 0.5 ? 1 : -1; // whole pack/animal comes from one side
+  defendState = {
+    threat: threatCfg.label,
+    threatKey,
+    threatCfg,
+    approachDir,
+    wave: [],
+    projectiles: [],
+    popTexts: [],
+    gunFlash: 0,
+    shotsLeft: weapon.defendShots,
+    timeLeft: 10,
+    startedAt: Date.now(),
+    spawnTimer: 0,
+    breaches: 0,
+    kills: 0,
+    reloading: false,
+    reloadTimer: 0,
+  };
+  drawBackdrop(CAMPS[state.campIndex].terrain);
+  setMsg(`Camp under threat: ${threatCfg.label}, coming in from the ${approachDir===1?'east':'west'}! Fire fast — anything that reaches the fire costs you.`);
+  clearActions();
+  requestAnimationFrame(defendLoop);
+}
+
+function spawnThreat(){
+  const cfg = defendState.threatCfg;
+  const dir = defendState.approachDir; // everything this session comes from the same side
+  const y = rand(H*0.55, H*0.85);
+  defendState.wave.push({
+    x: dir===1 ? -20 : W+20,
+    y, dir,
+    speed: rand(cfg.speed[0], cfg.speed[1]),
+    size: cfg.size,
+    color: cfg.color,
+    damage: cfg.damage,
+    alive: true,
+    reachedFire: false,
+  });
+}
+
+function drawWolf(x, y, size, color, dir){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+  ctx.fillStyle = color;
+  // low running body
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size*0.72, size*0.32, 0, 0, Math.PI*2);
+  ctx.fill();
+  // head + snout
+  ctx.beginPath();
+  ctx.ellipse(size*0.62, -size*0.08, size*0.26, size*0.2, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(size*0.82, -size*0.06); ctx.lineTo(size*1.05, -size*0.02); ctx.lineTo(size*0.82, size*0.08);
+  ctx.closePath(); ctx.fill();
+  // ears
+  ctx.beginPath();
+  ctx.moveTo(size*0.46, -size*0.24); ctx.lineTo(size*0.56, -size*0.42); ctx.lineTo(size*0.68, -size*0.24);
+  ctx.closePath(); ctx.fill();
+  // tail
+  ctx.beginPath();
+  ctx.moveTo(-size*0.68, 0); ctx.lineTo(-size*1.0, -size*0.18); ctx.lineTo(-size*0.85, size*0.06);
+  ctx.closePath(); ctx.fill();
+  // legs
+  ctx.fillRect(-size*0.4, size*0.18, size*0.1, size*0.22);
+  ctx.fillRect(size*0.3, size*0.18, size*0.1, size*0.22);
+  ctx.restore();
+}
+
+function drawBear(x, y, size, color, dir){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+  ctx.fillStyle = color;
+  // big hunched body
+  ctx.beginPath();
+  ctx.ellipse(-size*0.05, size*0.06, size*0.62, size*0.48, 0, 0, Math.PI*2);
+  ctx.fill();
+  // shoulder hump
+  ctx.beginPath();
+  ctx.ellipse(-size*0.2, -size*0.28, size*0.28, size*0.2, 0, 0, Math.PI*2);
+  ctx.fill();
+  // head
+  ctx.beginPath();
+  ctx.ellipse(size*0.5, -size*0.12, size*0.3, size*0.26, 0, 0, Math.PI*2);
+  ctx.fill();
+  // round ears
+  ctx.beginPath(); ctx.arc(size*0.36, -size*0.34, size*0.1, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(size*0.62, -size*0.34, size*0.1, 0, Math.PI*2); ctx.fill();
+  // snout
+  ctx.fillStyle = 'rgba(20,14,8,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(size*0.72, -size*0.04, size*0.13, size*0.1, 0, 0, Math.PI*2);
+  ctx.fill();
+  // legs
+  ctx.fillStyle = color;
+  ctx.fillRect(-size*0.35, size*0.34, size*0.16, size*0.2);
+  ctx.fillRect(size*0.15, size*0.34, size*0.16, size*0.2);
+  ctx.restore();
+}
+
+function drawRaider(x, y, size, color, dir){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+  ctx.fillStyle = color;
+  // legs
+  ctx.fillRect(-size*0.16, size*0.14, size*0.13, size*0.34);
+  ctx.fillRect(size*0.03, size*0.14, size*0.13, size*0.34);
+  // torso
+  ctx.fillRect(-size*0.2, -size*0.14, size*0.4, size*0.32);
+  // head
+  ctx.beginPath();
+  ctx.arc(0, -size*0.32, size*0.18, 0, Math.PI*2);
+  ctx.fill();
+  // hat brim
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(-size*0.28, -size*0.46, size*0.56, size*0.07);
+  // rifle held forward
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.5, size*0.07);
+  ctx.beginPath();
+  ctx.moveTo(size*0.12, -size*0.04);
+  ctx.lineTo(size*0.55, -size*0.22);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawThreat(t, threatKey){
+  if(threatKey === 'wolves') drawWolf(t.x, t.y, t.size, t.color, t.dir);
+  else if(threatKey === 'bear') drawBear(t.x, t.y, t.size, t.color, t.dir);
+  else drawRaider(t.x, t.y, t.size, t.color, t.dir);
+}
+
+function defendLoop(){
+  if(state.mode !== 'defend') return;
+  drawBackdrop(CAMPS[state.campIndex].terrain);
+  drawCampScene();
+
+  const now = Date.now();
+  const elapsed = (now - defendState.startedAt)/1000;
+  defendState.timeLeft = Math.max(0, 10 - elapsed);
+
+  defendState.spawnTimer -= 1;
+  if(defendState.spawnTimer <= 0){
+    spawnThreat();
+    defendState.spawnTimer = ri(defendState.threatCfg.spawnGap[0], defendState.threatCfg.spawnGap[1]);
+  }
+
+  defendState.wave.forEach(t=>{
+    if(!t.alive || t.reachedFire) return;
+    t.x += t.speed * t.dir;
+    const distToFire = Math.abs(t.x - W/2);
+    if(distToFire < 20){
+      t.reachedFire = true;
+      defendState.breaches += 1;
+      state.health = clamp(state.health - t.damage, 0, 100);
+      updateHud();
+    }
+  });
+  defendState.wave = defendState.wave.filter(t => t.alive && !t.reachedFire);
+
+  defendState.wave.forEach(t=>{
+    drawThreat(t, defendState.threatKey);
+  });
+
+  updateAndDrawProjectiles(defendState.projectiles, (p)=>{
+    let hit = false;
+    if(p.target && p.target.alive){
+      p.target.alive = false;
+      hit = true;
+      defendState.kills += 1;
+      defendState.popTexts.push({ x: p.tx, y: p.ty - 10, text: '💥 Driven off!', life: 40 });
+    }
+    if(hit) playHit(false); else playMiss();
+    ctx.fillStyle = hit ? 'rgba(200,160,60,0.55)' : 'rgba(120,30,30,0.35)';
+    ctx.beginPath();
+    ctx.arc(p.tx, p.ty, 16, 0, Math.PI*2);
+    ctx.fill();
+  });
+  updateAndDrawPopTexts(defendState.popTexts);
+
+  if(defendState.gunFlash > 0) defendState.gunFlash -= 1;
+  if(defendState.reloading){
+    defendState.reloadTimer -= 1;
+    if(defendState.reloadTimer <= 0) defendState.reloading = false;
+  }
+  drawMusket(defendState.gunFlash, defendState.reloading);
+
+  drawTrailMap(false);
+  ctx.fillStyle = 'rgba(36,26,16,0.7)';
+  ctx.fillRect(0,20,W,24);
+  ctx.fillStyle = defendState.reloading ? '#e8a13c' : '#e8d9b5';
+  ctx.font = '14px monospace';
+  const statusText = defendState.reloading ? '  RELOADING…' : '';
+  ctx.fillText(`DEFEND CAMP — Shots: ${defendState.shotsLeft}  Breaches: ${defendState.breaches}  Time: ${defendState.timeLeft.toFixed(1)}s${statusText}`, 10, 37);
+
+  if(defendState.timeLeft <= 0 || (defendState.shotsLeft <= 0 && defendState.wave.length === 0)){
+    endDefend();
+    return;
+  }
+  requestAnimationFrame(defendLoop);
+}
+
+function defendClick(evt){
+  if(defendState.shotsLeft <= 0) return;
+  if(defendState.reloading) return;
+  if(state.ammo <= 0){
+    setMsg("Out of ammunition — the camp is defenseless until the threat passes.");
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const cx = (evt.clientX - rect.left) * scaleX;
+  const cy = (evt.clientY - rect.top) * scaleY;
+
+  const weapon = currentWeapon();
+  defendState.shotsLeft -= 1;
+  state.ammo = Math.max(0, state.ammo - 1);
+  defendState.reloading = true;
+  defendState.reloadTimer = weapon.reloadFrames;
+  updateHud();
+  playShot();
+
+  let target = null;
+  for(const t of defendState.wave){
+    if(!t.alive) continue;
+    const dx = cx - t.x, dy = cy - t.y;
+    if(Math.abs(dx) < t.size + weapon.hitBonus + state.hitBonus && Math.abs(dy) < t.size + weapon.hitBonus + state.hitBonus){
+      target = t;
+      break;
+    }
+  }
+
+  const dist = Math.hypot(cx - GUN_X, cy - GUN_Y);
+  defendState.projectiles.push({
+    x: GUN_X, y: GUN_Y, tx: cx, ty: cy,
+    step: 0, steps: Math.max(6, Math.round(dist/24)),
+    target,
+  });
+  defendState.gunFlash = 6;
+}
+
+function endDefend(){
+  const breaches = defendState.breaches;
+  const kills = defendState.kills;
+  const threatLabel = defendState.threat;
+
+  if(breaches === 0){
+    const ammoBonus = 2;
+    const peltBonus = kills > 0 ? 1 : 0;
+    state.ammo += ammoBonus;
+    state.pelts += peltBonus;
+    updateHud();
+
+    const summaryMsg = `The camp holds! ${threatLabel} never reached the fire. You recover ${ammoBonus} ammo` +
+      (peltBonus > 0 ? ` and find a stray pelt near the treeline.` : `.`);
+    setMsg(summaryMsg);
+
+    state.mode = 'story';
+    if(peltBonus > 0){
+      drawPeltStoryScreen(
+        '🔥 CAMP HELD!',
+        `${threatLabel} never made it past the fire. Scouting afterward, you recover ${ammoBonus} ammo and a pelt left behind near the treeline.`,
+        peltBonus
+      );
+    } else {
+      drawAnnouncement('🔥 CAMP HELD!', `A quiet fight — you recover ${ammoBonus} ammo from the dark.`);
+    }
+    defendState = null;
+    setTimeout(()=>{
+      checkGameOver();
+      if(state.mode !== 'end') enterCamp();
+    }, 2200);
+  } else {
+    state.mode = 'camp';
+    setMsg(`The night is over. ${breaches} threat(s) reached camp before you drove them off.`);
+    defendState = null;
+    updateHud();
+    checkGameOver();
+    if(state.mode !== 'end') setTimeout(enterCamp, 30);
+  }
+}
+
+/* =========================================================
+   TRAVEL EVENTS — the random flavor & drama of the trail
+   ========================================================= */
+const TRAVEL_EVENTS = [
+  { text: "A grizzly raids the food stores overnight.", detail: "-3 food", effect: s => { s.food = Math.max(0, s.food - 3); } },
+  { text: "You trade tobacco with a Shoshone hunting party for fresh meat.", detail: "+3 food", effect: s => { s.food += 3; } },
+  { text: "An icy ford crossing leaves the men bruised and shivering.", detail: "-8 health", effect: s => { s.health = clamp(s.health - 8, 0, 100); } },
+  { text: "A trapper from another brigade shares whiskey and news from the coast.", detail: "+6 health", effect: s => { s.health = clamp(s.health + 6, 0, 100); } },
+  { text: "Your rifle misfires in the damp and needs repair.", detail: "-2 ammo", effect: s => { s.ammo = Math.max(0, s.ammo - 2); } },
+  { text: "You find a cache of powder and shot left by an earlier party.", detail: "+3 ammo", effect: s => { s.ammo += 3; } },
+  { text: "One of your traps is crushed crossing a rocky wash.", detail: "-1 trap", effect: s => { s.traps = Math.max(0, s.traps - 1); } },
+  { text: "Beaver sign is thick along this stretch — the men's spirits lift.", detail: "+4 health", effect: s => { s.health = clamp(s.health + 4, 0, 100); } },
+  { text: "A rattlesnake spooks the horses. No one's hurt, but nerves are frayed.", detail: null, effect: () => {} },
+  { text: "Snow on the divide slows the party for a day.", detail: "-1 food", effect: s => { s.food = Math.max(0, s.food - 1); } },
+  { text: "Clear skies and easy footing — the party makes good time.", detail: null, effect: () => {} },
+  { text: "A pack horse goes lame; the men grumble but push on.", detail: null, effect: () => {} },
+];
+
+function maybeTravelEvent(riskBoost = 0){
+  const chance = clamp(0.5 + riskBoost, 0, 1);
+  if(Math.random() < chance){
+    const ev = TRAVEL_EVENTS[ri(0, TRAVEL_EVENTS.length - 1)];
+    ev.effect(state);
+    updateHud();
+    redrawCampScene();
+    drawAnnouncement(ev.text, ev.detail || undefined);
+    return true;
+  }
+  return false;
+}
+
+/* =========================================================
+   MOVE TO NEXT CAMP
+   ========================================================= */
+function doMove(){
+  if(state.trapsPlaced > 0){
+    setMsg("You have traps still out on the line — check them before you move on, or abandon them.");
+    clearActions();
+    addAction('🪤 Check Traps First', doTraps);
+    addAction('Abandon Traps & Move On', ()=>{ state.trapsPlaced = 0; forceMove(); }, true);
+    return;
+  }
+  if(state.campIndex === 2 && !state.routeChoiceMade){
+    showRouteChoice();
+    return;
+  }
+  forceMove();
+}
+
+function showRouteChoice(){
+  clearActions();
+  setMsg("The road splits here. A shortcut cuts west through open, unscouted country — faster, but you're on your own out there. The known road keeps to the river — slower, but safer.");
+  addAction('🏜 Take the Shortcut (risky)', ()=>chooseRoute(true), false);
+  addAction('🛤 Stay the River Road (safer)', ()=>chooseRoute(false), true);
+}
+
+function chooseRoute(shortcut){
+  state.routeChoiceMade = true;
+  state.tookShortcut = shortcut;
+  if(shortcut){
+    setMsg("You push west on the shortcut, trusting to luck and daylight.");
+  } else {
+    state.food = Math.max(0, state.food - 1); // the longer road costs an extra day's provisions
+    setMsg("You keep to the known river road — slower, but sure.");
+    updateHud();
+  }
+  forceMove();
+}
+
+function forceMove(){
+  if(state.campIndex >= CAMPS.length - 1){
+    endGame(true);
+    return;
+  }
+  state.campIndex += 1;
+  state.day += 1;
+  state.food = Math.max(0, state.food - 1);
+  const camp = CAMPS[state.campIndex];
+  setMsg(`After a hard day's travel, the party reaches ${camp.name}. ${camp.desc}`);
+  updateHud();
+  clearActions();
+
+  let riskBoost = 0;
+  if(state.tookShortcut === true){ riskBoost = 0.3; }
+  else if(state.tookShortcut === false){ riskBoost = -0.5; }
+  state.tookShortcut = null; // one-time effect, used up on this transition
+
+  const hadEvent = maybeTravelEvent(riskBoost);
+  if(state.health <= 0){
+    endGame(false);
+    return;
+  }
+  setTimeout(enterCamp, hadEvent ? 1800 : 30);
+}
+
+/* =========================================================
+   GAME OVER / END
+   ========================================================= */
+function checkGameOver(){
+  if(state.health <= 0){
+    endGame(false);
+  }
+}
+
+function endGame(reachedPost){
+  state.mode = 'end';
+  clearActions();
+  drawBackdrop(reachedPost ? 'plain' : 'canyon');
+
+  let isNewBest = false;
+  if(reachedPost){
+    const best = getBestPelts();
+    if(state.pelts > best){ setBestPelts(state.pelts); isNewBest = true; }
+  }
+  updateHud();
+
+  ctx.fillStyle = 'rgba(36,26,16,0.85)';
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = '#e8d9b5';
+  ctx.font = 'bold 22px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(reachedPost ? "YOU REACHED THE TRADING POST" : "THE TRAIL CLAIMS ANOTHER TRAPPER", W/2, H/2 - 30);
+  ctx.font = '15px monospace';
+  ctx.fillText(reachedPost
+    ? `${state.pelts} beaver pelt(s) sold at Fort Boise — ${state.day} days on the trail.`
+    : `You made it ${state.day} days, as far as ${CAMPS[state.campIndex].name}.`, W/2, H/2 - 2);
+  ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = '#c9a24b';
+  let rank;
+  if(reachedPost){
+    rank = isNewBest ? "🏆 NEW BEST SEASON!"
+         : state.pelts >= 12 ? "A FINE SEASON — YOU'LL WINTER WELL"
+         : state.pelts >= 6  ? "A FAIR TAKE FOR THE SEASON"
+         : "A LEAN SEASON, BUT YOU MADE IT OUT ALIVE";
+  } else {
+    rank = "THIS COUNTRY SHOWS NO MERCY";
+  }
+  ctx.fillText(rank, W/2, H/2 + 26);
+  ctx.textAlign = 'left';
+
+  if(isNewBest) playCoin();
+
+  setMsg(reachedPost
+    ? `Journey complete! Final tally — ${state.pelts} beaver pelt(s), ${state.day} days on the trail.${isNewBest ? " That's a new personal best!" : ""}`
+    : `Your health gave out on the trail. Not every trapper who set out made it to Fort Boise.`);
+
+  addAction('↻ Start a New Season', resetGame, true);
+}
+
+function resetGame(){
+  state = { ...INITIAL_STATE };
+  updateHud();
+  showTitleScreen();
+}
+
+/* ---------- boot ---------- */
+updateHud();
+showTitleScreen();
+</script>
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K9J4ZPWL6S"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-K9J4ZPWL6S');
+</script>
+
+</body>
+</html>
